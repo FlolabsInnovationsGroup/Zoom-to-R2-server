@@ -148,7 +148,7 @@ a{color:var(--accent)}
 details.section{margin:24px 0 10px}
 details.section>summary{cursor:pointer;font-size:1rem;font-weight:600;padding:6px 0;display:flex;align-items:center;gap:8px;list-style:none}
 details.section>summary::-webkit-details-marker{display:none}
-details.section>summary::before{content:"\203A";display:inline-block;width:1em;color:var(--muted);transition:transform .15s}
+details.section>summary::before{content:"›";display:inline-block;width:1em;color:var(--muted);transition:transform .15s}
 details.section[open]>summary::before{transform:rotate(90deg)}
 details.section>summary .aside{font-size:.75rem;font-weight:400;color:var(--muted)}
 details.section>.scroll{margin-top:8px}
@@ -217,6 +217,8 @@ const n=document.getElementById(b.dataset.copy),l=b.dataset.label||(b.dataset.la
 const done=()=>{b.textContent="Copied";setTimeout(()=>{b.textContent=l},2000)};
 (navigator.clipboard?navigator.clipboard.writeText(n.textContent):Promise.reject()).then(done,()=>{const r=document.createRange();r.selectNodeContents(n);const s=getSelection();s.removeAllRanges();s.addRange(r);b.textContent="Press Ctrl+C"})});
 document.addEventListener("submit",e=>{const f=e.target,m=f.dataset.confirm;if(m&&!confirm(m)){e.preventDefault();return}
+if(f.dataset.busy){const b=f.querySelector("button");setTimeout(()=>{b.disabled=true;b.textContent="Checking..."},0);
+const h=document.createElement("div");h.className="hint";h.setAttribute("role","status");h.textContent=f.dataset.busy;f.after(h)}
 if(f.hasAttribute("data-needs-group")){const bs=f.querySelectorAll("input[name=groups]");const ok=[...bs].some(b=>b.checked);
 if(bs.length)bs[0].setCustomValidity(ok?"":"Choose at least one access group.");if(!ok){bs[0].reportValidity();e.preventDefault()}}});
 document.addEventListener("change",e=>{if(e.target.name==="groups")e.target.form.querySelectorAll("input[name=groups]").forEach(b=>b.setCustomValidity(""))});
@@ -374,6 +376,36 @@ def _run_card(run, run_log: list, totals: dict | None = None) -> str:
             f'{tail}</div></section>')
 
 
+def _cloud_card(lock: dict, totals: dict | None = None) -> str:
+    """Serverless (Vercel): no long-running copy. Zoom is checked once a day by a cron, or now with the button.
+    lock: the sync lock object ({"running", "since"} or {"running": False, "last": summary})."""
+    t = totals or {}
+    left_b = max((t.get("bytes_total") or 0) - (t.get("bytes_verified") or 0), 0)
+    if lock.get("running"):
+        state = '<span class="tag ok">Checking Zoom</span> New recordings are being copied to R2 now.'
+    elif not t.get("files"):
+        state = '<span class="tag">Idle</span> Nothing synced yet.'
+    else:
+        state = (f'<span class="tag ok">Up to date</span> Everything found in Zoom is in R2.' if not left_b else
+                 f'<span class="tag">Waiting</span> {gb(left_b)} still to copy on the next check.')
+    last = lock.get("last") or {}
+    if last.get("finished"):
+        what = (f'failed: {esc(last["error"])}' if last.get("error") else
+                f'copied {num(last.get("files", 0))} files ({gb(last.get("bytes", 0))})'
+                + (f', {num(last["failed"])} failed' if last.get("failed") else "")
+                + (f', {num(last["left"])} left for next time' if last.get("left") else ""))
+        by = "the daily check" if last.get("by") == "cron" else "Check Zoom now"
+        state += f'<div class="hint">Last check {esc(when(last["finished"]))} by {by}: {what}.</div>'
+    off = " disabled" if lock.get("running") else ""
+    btn = (f'<form method="post" data-busy="Checking Zoom... this can take a few minutes. Keep this page open.">'
+           f'<input type="hidden" name="action" value="sync_now"><button class="primary"{off}>Check Zoom now</button></form>')
+    hint = ("Zoom is checked automatically once a day. New recordings are copied to R2, newest first; "
+            "anything not finished in one check is picked up by the next.")
+    return (f'<section class="card" aria-labelledby="rc"><div class="run"><div><h3 id="rc">Zoom to R2</h3>'
+            f'<div class="state" role="status" aria-live="polite">{state}</div><div class="hint">{hint}</div></div>'
+            f'<div class="btns">{btn}</div></div></section>')
+
+
 def _status(s) -> str:
     """s: the dict from outputs.status_json (or None before the first sync run)."""
     if not s:
@@ -463,7 +495,7 @@ def _reveal(origin: str, new_key: str) -> str:
 
 
 def render_admin(*, status, keys: list, log: list, groups: dict, origin: str, nonce: str,
-                 new_key: str = "", error: str = "", run=None, run_log: list | None = None) -> str:
+                 new_key: str = "", error: str = "", run=None, run_log: list | None = None, cloud: dict | None = None) -> str:
     """status: dict or None; keys: dicts with id, name, key_prefix, state, expires_at, groups(list), last_used_at;
     log: dicts with at, tool, meeting_key, result, name; groups: {id: {label, description}};
     run: runctl.running() dict or None; run_log: last lines of sync.log."""
@@ -471,7 +503,7 @@ def render_admin(*, status, keys: list, log: list, groups: dict, origin: str, no
     err = f'<div class="callout bad" role="alert">{esc(error)}</div>' if error else ""
     boxes = _boxes(groups, [])
     run_err = ""
-    if error.startswith("A run is already"):  # a refused Start shows next to the buttons, not above the key form
+    if error.startswith(("A run is already", "A sync is already")):  # a refused Start shows next to the buttons, not above the key form
         run_err, err = err, ""
     key_rows = "".join(_key_row(k, groups) for k in keys) or \
         '<tr><td colspan="6" class="empty">No keys yet. Create one above to connect Claude.</td></tr>'
@@ -481,7 +513,7 @@ def render_admin(*, status, keys: list, log: list, groups: dict, origin: str, no
         f'{"&#10003; " if l["result"] == "ok" else "&#10005; "}{esc(l["result"])}</span></td></tr>' for l in log) or \
         '<tr><td colspan="5" class="empty">No calls yet. Calls appear here once a key is used.</td></tr>'
     return _document(nonce, f"""<header>{_brand("Admin")}<form method="post" action="/admin/logout"><button class="ghost">Sign out</button></form></header><main>
-<h2>Sync status</h2><div id="sync">{run_err}{_run_card(run, run_log or [], (status or {}).get("totals"))}{_status(status) if status or not run else ""}</div>
+<h2>Sync status</h2><div id="sync">{run_err}{_cloud_card(cloud, (status or {}).get("totals")) if cloud is not None else _run_card(run, run_log or [], (status or {}).get("totals"))}{_status(status) if status or not run else ""}</div>
 <h2>API keys</h2>{created}{err}
 <form method="post" class="card create" data-needs-group><input type="hidden" name="action" value="create">
 <div class="left"><div class="field"><label for="kn">Name</label>
@@ -493,7 +525,7 @@ def render_admin(*, status, keys: list, log: list, groups: dict, origin: str, no
 <div class="scroll"><table class="keys"><caption class="sr-only">API keys</caption><tr><th scope="col">Name</th><th scope="col">Prefix</th><th scope="col">State</th><th scope="col">Access</th><th scope="col">Last used</th><th scope="col"><span class="sr-only">Actions</span></th></tr>{key_rows}</table></div>
 <details class="section"><summary>Recent access <span class="aside">last 50 calls</span></summary>
 <div class="scroll"><table><caption class="sr-only">Recent access log</caption><tr><th scope="col">When</th><th scope="col">Key</th><th scope="col">Tool</th><th scope="col">Meeting</th><th scope="col">Result</th></tr>{log_rows}</table></div></details>
-</main>""", live=bool(run))
+</main>""", live=bool(run) or bool((cloud or {}).get("running")))
 
 
 STATE_TAGS = {"archived": ("ok", "Archived"), "pending": ("", "Pending"), "partial": ("warn", "Pending (partial)"),

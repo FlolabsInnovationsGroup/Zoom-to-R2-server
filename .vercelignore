@@ -1,0 +1,10 @@
+.local
+.env
+**/.venv
+**/__pycache__
+sync/tests
+sync/zoom_archive.egg-info
+worker
+deploy
+docs
+*.sqlite

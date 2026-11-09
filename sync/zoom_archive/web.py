@@ -23,12 +23,15 @@ from itsdangerous import BadSignature, URLSafeTimedSerializer
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
+from starlette.middleware import Middleware
 from starlette.routing import Route
+from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 
-from . import admin_page, runctl, search
+from . import admin_page, r2db, runctl, search
 from .access import (ACCESS, GROUPS, ReadOnlyR2, active_key, connect, init_keys_db, key_state, new_api_key, now_iso,
                      parse_groups, read_manifest, sha256_hex)
 from .config import ConfigError, load_web_config
+from .r2 import R2
 from .mcp_server import CALLER, Archive, build_mcp
 from .outputs import status_json
 
@@ -113,10 +116,17 @@ def origin_of(request: Request) -> str:
 def create_app(cfg: dict | None = None) -> Starlette:
     cfg = cfg or load_web_config()  # raises ConfigError (no ADMIN_PASSWORD etc.) -> main() prints it and exits
     db_path = cfg["keys_db_path"]
-    init_keys_db(db_path)
     manifest_path = cfg["manifest_path"]
+    serverless = r2db.enabled()  # Vercel: the SQLite files live in R2 (see r2db.py)
+    rw = R2(cfg["r2_rw"]) if serverless else None
+    if serverless:
+        if r2db.pull(rw, "keys") is None:  # first start: create the (empty) key list in R2
+            r2db.edit(rw, "keys", lambda p: None, create=init_keys_db)
+    else:
+        init_keys_db(db_path)
     archive = Archive(ReadOnlyR2(cfg["r2"]), db_path, manifest_path,
-                      cfg.get("search_db_path") or search.default_path(manifest_path))
+                      cfg.get("search_db_path") or search.default_path(manifest_path),
+                      log=(lambda *a: r2db.log_access(rw, *a)) if serverless else None)
     mcp = build_mcp(archive)
     mcp.streamable_http_app()  # creates mcp.session_manager
     signer = URLSafeTimedSerializer(cfg["secret_key"], salt="admin-session")
@@ -134,7 +144,7 @@ def create_app(cfg: dict | None = None) -> Starlette:
 
     def same_origin(request: Request) -> bool:
         got = request.headers.get("origin")
-        return bool(got) and got in (origin_of(request), cfg.get("origin"))
+        return bool(got) and got in (origin_of(request), *(cfg.get("origins") or [cfg.get("origin")]))
 
     def html(body: str, nonce: str, status: int = 200) -> HTMLResponse:
         return HTMLResponse(body, status, {"Cache-Control": "no-store", "Content-Security-Policy": admin_page.csp(nonce)})
@@ -143,16 +153,26 @@ def create_app(cfg: dict | None = None) -> Starlette:
         c = connect(db_path)
         try:
             rows = c.execute("SELECT * FROM api_keys ORDER BY created_at DESC").fetchall()
-            calls = c.execute("SELECT l.at, l.tool, l.meeting_key, l.result, k.name FROM access_log l "
-                            "LEFT JOIN api_keys k ON k.id = l.key_id ORDER BY l.id DESC LIMIT 50").fetchall()
+            calls = [] if serverless else [dict(r) for r in c.execute(
+                "SELECT l.at, l.tool, l.meeting_key, l.result, k.name FROM access_log l "
+                "LEFT JOIN api_keys k ON k.id = l.key_id ORDER BY l.id DESC LIMIT 50").fetchall()]
         finally:
             c.close()
         keys = [{**dict(r), "state": key_state(r), "groups": parse_groups(r["access_groups"])} for r in rows]
+        cloud = None
+        if serverless:
+            entries, last_used = r2db.recent_access(rw)
+            names = {k["id"]: k["name"] for k in keys}
+            calls = [{**e, "name": names.get(e.get("key_id"))} for e in entries]
+            for k in keys:
+                k["last_used_at"] = last_used.get(k["id"]) or k.get("last_used_at")
+            cloud = r2db.lock_state(rw)
         nonce = token_urlsafe(12)
-        page = admin_page.render_admin(status=live_status(manifest_path), keys=keys, log=[dict(r) for r in calls],
-                                       run=runctl.running(manifest_path), run_log=runctl.log_tail(manifest_path, 15),
-                                       groups=GROUPS, origin=cfg.get("origin") or origin_of(request), nonce=nonce,
-                                       new_key=new_key, error=error)
+        page = admin_page.render_admin(status=live_status(manifest_path), keys=keys, log=calls,
+                                       run=None if serverless else runctl.running(manifest_path),
+                                       run_log=[] if serverless else runctl.log_tail(manifest_path, 15),
+                                       cloud=cloud, groups=GROUPS, origin=cfg.get("origin") or origin_of(request),
+                                       nonce=nonce, new_key=new_key, error=error)
         return html(page, nonce, status)
 
     async def root(request):
@@ -208,43 +228,69 @@ def create_app(cfg: dict | None = None) -> Starlette:
             return PlainTextResponse("Forbidden", 403)
         form = await request.form()
         action = form.get("action")
-        if action in ("start_backfill", "start_scan"):
+        if action == "sync_now" and serverless:
+            from . import cloud as cloud_sync
+            got = await asyncio.to_thread(cloud_sync.run_sync, "admin")
+            if got.get("busy"):
+                return admin_view(request, 409, error="A sync is already running. Wait until it has finished.")
+            return RedirectResponse("/admin", 303)
+        if action in ("start_backfill", "start_scan") and not serverless:
             mode = "backfill" if action == "start_backfill" else "scan"
             if not await asyncio.to_thread(runctl.start, manifest_path, mode):
                 return admin_view(request, 409, error="A run is already going. Stop it, or wait until it has finished.")
             return RedirectResponse("/admin", 303)
-        if action == "stop":
+        if action == "stop" and not serverless:
             runctl.request_stop(manifest_path)
             return RedirectResponse("/admin", 303)
         key_id = str(form.get("id") or "")
         groups = [g for g in form.getlist("groups") if g in GROUPS]
-        c = connect(db_path)
-        try:
-            with c:
-                if action == "create":
-                    name, day = str(form.get("name") or "").strip()[:100], str(form.get("expires") or "")
-                    try:
-                        if day:
-                            date.fromisoformat(day)
-                    except ValueError:
-                        day = "bad"
-                    if not name or not groups or day == "bad":
-                        return admin_view(request, 400, error="Give the key a name and tick at least one group.")
-                    key = new_api_key()
-                    c.execute("INSERT INTO api_keys (id, name, key_prefix, key_hash, access_groups, created_by, "
-                              "created_at, expires_at) VALUES (?,?,?,?,?,?,?,?)",
-                              (str(uuid.uuid4()), name, key[:12], sha256_hex(key), json.dumps(groups), "admin",
-                               now_iso(), f"{day}T23:59:59Z" if day else None))
-                    new_key = key
-                elif action == "groups" and groups:
-                    c.execute("UPDATE api_keys SET access_groups = ? WHERE id = ?", (json.dumps(groups), key_id))
-                elif action == "revoke":
-                    c.execute("UPDATE api_keys SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL", (now_iso(), key_id))
-        finally:
-            c.close()
+        new_key, row = "", None
+        if action == "create":
+            name, day = str(form.get("name") or "").strip()[:100], str(form.get("expires") or "")
+            try:
+                if day:
+                    date.fromisoformat(day)
+            except ValueError:
+                day = "bad"
+            if not name or not groups or day == "bad":
+                return admin_view(request, 400, error="Give the key a name and tick at least one group.")
+            new_key = new_api_key()
+            row = (str(uuid.uuid4()), name, new_key[:12], sha256_hex(new_key), json.dumps(groups), "admin",
+                   now_iso(), f"{day}T23:59:59Z" if day else None)
+
+        def apply(path: str) -> None:
+            c = connect(path)
+            try:
+                with c:
+                    if action == "create":
+                        c.execute("INSERT INTO api_keys (id, name, key_prefix, key_hash, access_groups, created_by, "
+                                  "created_at, expires_at) VALUES (?,?,?,?,?,?,?,?)", row)
+                    elif action == "groups" and groups:
+                        c.execute("UPDATE api_keys SET access_groups = ? WHERE id = ?", (json.dumps(groups), key_id))
+                    elif action == "revoke":
+                        c.execute("UPDATE api_keys SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL",
+                                  (now_iso(), key_id))
+            finally:
+                c.close()
+
+        if action in ("create", "groups", "revoke"):
+            if serverless:  # saved to R2 only if nobody else changed the key list meanwhile (retried otherwise)
+                await asyncio.to_thread(r2db.edit, rw, "keys", apply)
+            else:
+                apply(db_path)
         if action == "create":
             return admin_view(request, new_key=new_key)
         return RedirectResponse("/admin", 303)
+
+    async def cron_sync(request: Request):
+        """Vercel cron (daily): Authorization: Bearer <CRON_SECRET>."""
+        secret = cfg.get("cron_secret") or ""
+        given = request.headers.get("authorization", "")
+        if not serverless or not secret or not hmac.compare_digest(given.encode(), f"Bearer {secret}".encode()):
+            return PlainTextResponse("Unauthorized", 401)
+        from . import cloud as cloud_sync
+        got = await asyncio.to_thread(cloud_sync.run_sync, "cron")
+        return JSONResponse(got, 409 if got.get("busy") else 200)
 
     class McpApp:
         """ASGI app: authenticate (key row re-checked on every request), then hand over to the MCP SDK."""
@@ -261,14 +307,37 @@ def create_app(cfg: dict | None = None) -> Starlette:
                 return await resp(scope, receive, send)
             token = CALLER.set(caller)
             try:
-                await mcp.session_manager.handle_request(scope, receive, send)
+                if serverless:  # stateless: a fresh manager per request, so nothing depends on app startup events
+                    sm = StreamableHTTPSessionManager(app=mcp._mcp_server, json_response=True, stateless=True,
+                                                      security_settings=mcp.settings.transport_security)
+                    async with sm.run():
+                        await sm.handle_request(scope, receive, send)
+                else:
+                    await mcp.session_manager.handle_request(scope, receive, send)
             finally:
                 CALLER.reset(token)
 
     @asynccontextmanager
     async def lifespan(app):
+        if serverless:
+            yield
+            return
         async with mcp.session_manager.run():
             yield
+
+    class Refresh:
+        """Serverless: before each request, make sure the local copies of the R2 files are current
+        (one cheap check per file at most every 30 s per instance)."""
+
+        def __init__(self, app):
+            self.app = app
+
+        async def __call__(self, scope, receive, send):
+            if scope["type"] == "http":
+                names = ["manifest", "keys"] + (["search"] if scope["path"].startswith("/mcp") else [])
+                for n in names:
+                    await asyncio.to_thread(r2db.pull, rw, n)
+            await self.app(scope, receive, send)
 
     mcp_app = McpApp()
     app = Starlette(lifespan=lifespan, routes=[
@@ -279,7 +348,8 @@ def create_app(cfg: dict | None = None) -> Starlette:
         Route("/admin/recordings", recordings),
         Route("/mcp", mcp_app),
         Route("/mcp/{key}", mcp_app),
-    ])
+        Route("/api/cron/sync", cron_sync),
+    ], middleware=[Middleware(Refresh)] if serverless else [])
     app.state.archive = archive
     return app
 

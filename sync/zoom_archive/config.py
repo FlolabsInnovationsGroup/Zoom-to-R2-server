@@ -4,7 +4,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import search
+from . import r2db, search
 
 SYNC_DIR = Path(__file__).resolve().parent.parent
 REPO_ROOT = SYNC_DIR.parent
@@ -49,6 +49,8 @@ def load_config() -> Config:
         g("TEAMS_YAML", str(SYNC_DIR / "teams.yaml")),
         int(g("SYNC_CONCURRENCY", "3") or 3), "")
     cfg.search_db_path = g("SEARCH_DB_PATH") or search.default_path(cfg.manifest_path)
+    if r2db.enabled():  # serverless: local copies of the files kept in R2
+        cfg.manifest_path, cfg.search_db_path = r2db.path("manifest"), r2db.path("search")
     missing = [n for n, v in (("ZOOM_ACCOUNT_ID", cfg.zoom_account_id), ("ZOOM_CLIENT_ID", cfg.zoom_client_id),
                               ("ZOOM_CLIENT_SECRET", cfg.zoom_client_secret),
                               ("R2_ACCESS_KEY_ID", cfg.r2_access_key_id),
@@ -80,6 +82,7 @@ def load_web_config() -> dict:
         "r2": R2Settings(endpoint, g("R2_READ_ACCESS_KEY_ID") or g("R2_ACCESS_KEY_ID"),
                          g("R2_READ_SECRET_ACCESS_KEY") or g("R2_SECRET_ACCESS_KEY"), g("R2_BUCKET", "zoom-archive-test")),
         "admin_password": g("ADMIN_PASSWORD"), "secret_key": g("ADMIN_SECRET_KEY"),
+        "cron_secret": g("CRON_SECRET"),  # Vercel sends it as "Authorization: Bearer ..." on cron runs
         "manifest_path": g("MANIFEST_PATH", str(REPO_ROOT / ".local" / "manifest.sqlite")),
         "keys_db_path": g("KEYS_DB_PATH", str(REPO_ROOT / ".local" / "keys.sqlite")),
         "bind": g("ADMIN_BIND", "127.0.0.1:8080"),
@@ -90,7 +93,16 @@ def load_web_config() -> dict:
     codespace = g("CODESPACE_NAME"), g("GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN")
     cfg["origin"] = g("ADMIN_ORIGIN").rstrip("/") or (
         f"https://{codespace[0]}-{port}.{codespace[1]}" if all(codespace) else "")
+    # On Vercel: the production domain, this deployment's own URL and the branch URL are all the page's address.
+    vercel = [f"https://{h}" for h in (g("VERCEL_PROJECT_PRODUCTION_URL"), g("VERCEL_URL"), g("VERCEL_BRANCH_URL")) if h]
+    cfg["origins"] = [o for o in [cfg["origin"], *vercel] if o]
+    cfg["origin"] = cfg["origin"] or (vercel[0] if vercel else "")
     cfg["search_db_path"] = g("SEARCH_DB_PATH") or search.default_path(cfg["manifest_path"])
+    # The read-write key: in serverless mode the web app also saves the key list and the access log to R2.
+    cfg["r2_rw"] = R2Settings(endpoint, g("R2_ACCESS_KEY_ID"), g("R2_SECRET_ACCESS_KEY"), g("R2_BUCKET", "zoom-archive-test"))
+    if r2db.enabled():
+        cfg["manifest_path"], cfg["keys_db_path"], cfg["search_db_path"] = (
+            r2db.path("manifest"), r2db.path("keys"), r2db.path("search"))
     missing = [n for n, v in (("ADMIN_PASSWORD", cfg["admin_password"]), ("ADMIN_SECRET_KEY", cfg["secret_key"]),
                               ("R2_ACCESS_KEY_ID", cfg["r2"].r2_access_key_id),
                               ("R2_SECRET_ACCESS_KEY", cfg["r2"].r2_secret_access_key)) if not v]

@@ -1,0 +1,10 @@
+# Vercel installs these for app.py (same as sync/pyproject.toml, minus the local-only server and tests).
+requests>=2.31
+boto3>=1.35
+PyYAML>=6.0
+python-dotenv>=1.0
+tzdata>=2024.1
+starlette>=0.40
+mcp>=1.9,<2
+itsdangerous>=2.1
+python-multipart>=0.0.9

@@ -1,4 +1,5 @@
-"""Cloudflare R2 (S3 API). Only head, get (to hash), list, put and multipart calls exist here."""
+"""Cloudflare R2 (S3 API). Only head, get, list, put (plain and conditional) and multipart calls exist here.
+There is no delete call."""
 import hashlib
 
 import boto3
@@ -17,6 +18,10 @@ def content_type(key: str) -> str:
 
 class SizeMismatch(RuntimeError):
     pass
+
+
+class Conflict(RuntimeError):
+    """A conditional write lost: the object changed since it was read."""
 
 
 class R2:
@@ -53,6 +58,44 @@ class R2:
 
     def write(self, key: str, data: bytes) -> None:
         self.s3.put_object(Bucket=self.bucket, Key=key, Body=data, ContentType=content_type(key))
+
+    # --- used when the SQLite files live in R2 (serverless, see r2db.py) ---
+
+    def etag(self, key: str) -> str | None:
+        try:
+            return self.s3.head_object(Bucket=self.bucket, Key=key)["ETag"]
+        except ClientError as e:
+            if e.response.get("ResponseMetadata", {}).get("HTTPStatusCode") == 404:
+                return None
+            raise
+
+    def download(self, key: str, path) -> str:
+        """Object -> local file. Returns the ETag of what was downloaded."""
+        r = self.s3.get_object(Bucket=self.bucket, Key=key)
+        with open(path, "wb") as f:
+            for chunk in iter(lambda: r["Body"].read(1 << 20), b""):
+                f.write(chunk)
+        return r["ETag"]
+
+    def write_if(self, key: str, data: bytes, etag: str | None) -> str:
+        """Write only if the object still has this ETag (None: only if it does not exist yet).
+        Raises Conflict when someone else changed it first. Returns the new ETag."""
+        cond = {"IfMatch": etag} if etag else {"IfNoneMatch": "*"}
+        try:
+            r = self.s3.put_object(Bucket=self.bucket, Key=key, Body=data, ContentType=content_type(key), **cond)
+        except ClientError as e:
+            if e.response.get("ResponseMetadata", {}).get("HTTPStatusCode") in (409, 412):
+                raise Conflict(key) from None
+            raise
+        return r["ETag"]
+
+    def keys_page(self, prefix: str, max_keys: int = 1000) -> "list[str]":
+        """First max_keys keys under prefix, in key order."""
+        r = self.s3.list_objects_v2(Bucket=self.bucket, Prefix=prefix, MaxKeys=max_keys)
+        return [o["Key"] for o in r.get("Contents", [])]
+
+    def read(self, key: str) -> bytes:
+        return self.s3.get_object(Bucket=self.bucket, Key=key)["Body"].read()
 
     def upload_stream(self, key: str, chunks, expected: int, exact: bool = True) -> str:
         """Hash while streaming into R2. Returns sha256. Raises SizeMismatch unless exactly `expected`

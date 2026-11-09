@@ -91,9 +91,10 @@ def meeting_line(m: dict) -> str:
 class Archive:
     """R2 (read-only) + keys DB + the local manifest (30 s cache) + search.sqlite."""
 
-    def __init__(self, r2, db_path: str, manifest_path: str, search_db_path: str, ttl: float = LIST_TTL):
+    def __init__(self, r2, db_path: str, manifest_path: str, search_db_path: str, ttl: float = LIST_TTL, log=None):
         self.r2, self.db_path, self.manifest_path, self.search_db_path, self.ttl = \
             r2, db_path, manifest_path, search_db_path, ttl
+        self.log = log  # serverless: log(key_id, tool, meeting_key, result) to R2 instead of the keys DB
         self._cache: tuple[float, list[dict]] | None = None
 
     def all_meetings(self) -> list[dict]:
@@ -378,7 +379,13 @@ def run_tool(ar: Archive, tool: str, fn, args: dict, meeting_key: str | None) ->
     except Exception as e:  # noqa: BLE001
         log.error("tool %s failed: %s", tool, type(e).__name__)
         out = Outcome("Internal error while reading the archive. Try again later.", "error")
-    record_access(ar.db_path, key_id, tool, out.meeting_key or meeting_key, out.result)
+    if ar.log:
+        try:
+            ar.log(key_id, tool, out.meeting_key or meeting_key, out.result)
+        except Exception:  # noqa: BLE001 - logging must not break a call
+            log.error("access log write failed")
+    else:
+        record_access(ar.db_path, key_id, tool, out.meeting_key or meeting_key, out.result)
     return CallToolResult(content=[TextContent(type="text", text=out.text)], isError=out.result != "ok")
 
 

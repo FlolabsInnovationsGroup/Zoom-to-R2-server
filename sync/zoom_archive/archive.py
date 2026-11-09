@@ -39,6 +39,7 @@ class Ctx:
         self.started, self.finished, self.exit_code = now(), None, None
         self.fallback = False
         self.stop = threading.Event()
+        self.deadline: float | None = None  # serverless: start no new file after this time (they stay pending)
 
 
 # --- users and listing -------------------------------------------------------------------------
@@ -215,7 +216,7 @@ def archive_file(ctx: Ctx, row: dict, f: dict) -> None:
             ctx.n["planned"] += 1
             ctx.n["planned_bytes"] += size
         return
-    if ctx.stop.is_set():
+    if ctx.stop.is_set() or (ctx.deadline and time.time() > ctx.deadline):
         return  # stays pending for the next run
     ctx.db.set_status(fid, "pending", attempt=True)
     try:
