@@ -24,7 +24,7 @@ def parse_args(argv):
     p.add_argument("--meeting-id", help="only this meeting id")
     p.add_argument("--limit", type=int, help="at most N meetings")
     p.add_argument("--dry-run", action="store_true", help="plan only, download and upload nothing")
-    p.add_argument("--concurrency", type=int, choices=range(1, 5), help="parallel downloads (default SYNC_CONCURRENCY)")
+    p.add_argument("--concurrency", type=int, choices=range(1, 9), help="parallel files, 1-8 (default SYNC_CONCURRENCY)")
     p.add_argument("--lookback-days", type=int, default=7, help="sync mode only (default 7)")
     return p.parse_args(argv)
 
@@ -72,7 +72,7 @@ def main(argv=None) -> int:
                 code = archive.run_reindex(ctx)
             else:
                 code = archive.run_archive(ctx, frm, to, args.user, args.meeting_id, args.limit,
-                                           args.concurrency or min(max(cfg.concurrency, 1), 4))
+                                           args.concurrency or min(max(cfg.concurrency, 1), 8))
         finally:
             if old_handler is not None:
                 signal.signal(signal.SIGTERM, old_handler)

@@ -26,13 +26,20 @@ def _p(manifest_path: str, name: str) -> Path:
 def running(manifest_path: str) -> dict | None:
     """{pid, mode, started_at, stopping} of the live run, or None."""
     f = _p(manifest_path, "sync.alive")
-    try:
-        if time.time() - f.stat().st_mtime > STALE:
-            return None
-        info = json.loads(f.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
-    return {**info, "stopping": stop_requested(manifest_path)}
+    for attempt in range(5):  # on Windows the file is briefly unreadable while heartbeat() replaces it
+        try:
+            if time.time() - f.stat().st_mtime > STALE:
+                return None
+            info = json.loads(f.read_text(encoding="utf-8"))
+            return {**info, "stopping": stop_requested(manifest_path)}
+        except FileNotFoundError:
+            if attempt == 4:
+                return None
+        except (OSError, ValueError):
+            if attempt == 4:
+                return None
+        time.sleep(0.05)
+    return None
 
 
 def heartbeat(manifest_path: str, info: dict) -> None:
@@ -102,7 +109,7 @@ def request_stop(manifest_path: str) -> None:
         _p(manifest_path, "sync.stop").write_text(str(time.time()), encoding="utf-8")
 
 
-def start(manifest_path: str, mode: str, concurrency: int = 3) -> bool:
+def start(manifest_path: str, mode: str, concurrency: int = 6) -> bool:
     """Start `python -m zoom_archive --mode <mode>` in the background, output appended to sync.log.
     False if a run is already going. The child gets this process's environment (Zoom + R2 settings)."""
     if mode not in MODES:

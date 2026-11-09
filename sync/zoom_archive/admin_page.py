@@ -145,6 +145,18 @@ a{color:var(--accent)}
 .run .state .tag{font-size:.875rem;padding:1px 10px}
 .run .btns{display:flex;flex-wrap:wrap;gap:8px}
 .run .btns form{margin:0}
+details.section{margin:24px 0 10px}
+details.section>summary{cursor:pointer;font-size:1rem;font-weight:600;padding:6px 0;display:flex;align-items:center;gap:8px;list-style:none}
+details.section>summary::-webkit-details-marker{display:none}
+details.section>summary::before{content:"\203A";display:inline-block;width:1em;color:var(--muted);transition:transform .15s}
+details.section[open]>summary::before{transform:rotate(90deg)}
+details.section>summary .aside{font-size:.75rem;font-weight:400;color:var(--muted)}
+details.section>.scroll{margin-top:8px}
+p.links{margin:14px 0 0}
+form.filters{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-end;margin:12px 0}
+form.filters .grow{flex:1;min-width:180px}
+select{font:inherit;min-height:36px;padding:5px 30px 5px 10px;border:1px solid var(--ctl);border-radius:8px;background:var(--card);color:var(--text)}
+@media (pointer:coarse){select{min-height:44px}}
 .techlog{width:100%;margin-top:6px}.techlog summary{cursor:pointer;font-size:.75rem;color:var(--muted)}
 .runlog{margin-top:8px;max-height:14rem;overflow:auto;flex:none;width:100%}
 button:disabled,button:disabled:hover,button:disabled:active{background:var(--sunk);border-color:var(--line);color:var(--muted);opacity:1;cursor:not-allowed;transform:none;filter:none}
@@ -208,6 +220,7 @@ document.addEventListener("submit",e=>{const f=e.target,m=f.dataset.confirm;if(m
 if(f.hasAttribute("data-needs-group")){const bs=f.querySelectorAll("input[name=groups]");const ok=[...bs].some(b=>b.checked);
 if(bs.length)bs[0].setCustomValidity(ok?"":"Choose at least one access group.");if(!ok){bs[0].reportValidity();e.preventDefault()}}});
 document.addEventListener("change",e=>{if(e.target.name==="groups")e.target.form.querySelectorAll("input[name=groups]").forEach(b=>b.setCustomValidity(""))});
+document.addEventListener("change",e=>{if(e.target.matches("select[data-autosubmit]"))e.target.form.submit()});
 let live=!!document.body.dataset.live;
 setInterval(()=>{if(!live)return;fetch(location.pathname,{credentials:"same-origin"}).then(r=>r.ok?r.text():null).then(t=>{if(!t)return;
 const d=new DOMParser().parseFromString(t,"text/html"),n=d.getElementById("sync"),o=document.getElementById("sync");if(!n||!o)return;
@@ -377,21 +390,14 @@ def _status(s) -> str:
         last = "<strong>Last run</strong> none recorded"
     hero = f'<div class="hero{"" if show_trash else " solo"}">{_backfill(t)}{_trash(tr) if show_trash else ""}</div>'
     lastcard = f'<div class="card quiet">{last}<div class="hint">Status as of {esc(when(s["generated_at"]))}</div></div>'
-    failed = unmapped = ""
+    failed = ""
     if s.get("failed_files"):
         rows = "".join(
             f'<tr><td dir="auto">{(esc(f["topic"]) + "<br>") if f.get("topic") else ""}<code>{esc(f["meeting_key"])}</code></td>'
             f'<td>{esc(f["recording_type"])}</td><td dir="auto">{esc(f["last_error"])}</td></tr>' for f in s["failed_files"])
-        failed = (f'<h2>Failed files <span class="tag bad">{len(s["failed_files"])}</span></h2><div class="scroll"><table>'
-                  '<caption class="sr-only">Failed files</caption><tr><th scope="col">Meeting</th>'
-                  f'<th scope="col">Type</th><th scope="col">Error</th></tr>{rows}</table></div>')
-    if s.get("unmapped_topics"):
-        rows = "".join(f'<tr><td dir="auto">{esc(u["topic"])}</td><td class="num">{num(u["meetings"])}</td></tr>'
-                       for u in s["unmapped_topics"])
-        unmapped = ('<h2>Filed in John\'s folder <span class="aside">No team rule matched these topics, so they '
-                    'are in john-account/misc/. Admin keys can read them.</span></h2>'
-                    '<div class="scroll"><table><caption class="sr-only">Unmapped topics</caption><tr><th scope="col">Topic</th>'
-                    f'<th scope="col" class="num">Meetings</th></tr>{rows}</table></div>')
+        failed = (f'<details class="section"><summary>Failed files <span class="tag bad">{len(s["failed_files"])}</span></summary>'
+                  '<div class="scroll"><table><caption class="sr-only">Failed files</caption><tr><th scope="col">Meeting</th>'
+                  f'<th scope="col">Type</th><th scope="col">Error</th></tr>{rows}</table></div></details>')
     unmapped_tag = '<span class="tag bad">! not mapped: no key group covers it</span>'
     def archived(a):
         done, total = a.get("meetings_complete"), a["bytes"] or 0
@@ -404,13 +410,14 @@ def _status(s) -> str:
         f'<td class="num">{num(a["meetings"])}</td><td class="num">{archived(a)}</td>'
         f'<td class="num nowrap">{gb(a["bytes"])}</td><td>{"" if a["mapped"] else unmapped_tag}</td></tr>'
         for a in s["accounts"])
-    accounts = ('<h2>Accounts <span class="aside"><a href="/admin/recordings">All recordings</a></span></h2>'
+    accounts = ('<p class="links"><a href="/admin/recordings">All recordings</a></p>'
+                '<details class="section"><summary>Accounts</summary>'
                 '<div class="scroll"><table class="accounts"><caption class="sr-only">Accounts</caption>'
                 '<tr><th scope="col">Folder</th><th scope="col">Host</th>'
                 '<th scope="col" class="num">Meetings</th><th scope="col" class="num">Archived</th>'
                 '<th scope="col" class="num">Size</th>'
-                f'<th scope="col"><span class="sr-only">Mapping</span></th></tr>{rows}</table></div>')
-    return f"{hero}{lastcard}{failed}{unmapped}{accounts}"
+                f'<th scope="col"><span class="sr-only">Mapping</span></th></tr>{rows}</table></div></details>')
+    return f"{hero}{lastcard}{failed}{accounts}"
 
 
 def _boxes(groups: dict, checked: list, small: bool = False, off: bool = False) -> str:
@@ -484,8 +491,8 @@ def render_admin(*, status, keys: list, log: list, groups: dict, origin: str, no
 <fieldset><legend>Access</legend><p class="hint">Pick at least one group. You can change this later.</p>{boxes}</fieldset>
 <div class="actions"><button class="primary">Create key</button></div></form>
 <div class="scroll"><table class="keys"><caption class="sr-only">API keys</caption><tr><th scope="col">Name</th><th scope="col">Prefix</th><th scope="col">State</th><th scope="col">Access</th><th scope="col">Last used</th><th scope="col"><span class="sr-only">Actions</span></th></tr>{key_rows}</table></div>
-<h2>Recent access <span class="aside">Last 50 calls</span></h2>
-<div class="scroll"><table><caption class="sr-only">Recent access log</caption><tr><th scope="col">When</th><th scope="col">Key</th><th scope="col">Tool</th><th scope="col">Meeting</th><th scope="col">Result</th></tr>{log_rows}</table></div>
+<details class="section"><summary>Recent access <span class="aside">last 50 calls</span></summary>
+<div class="scroll"><table><caption class="sr-only">Recent access log</caption><tr><th scope="col">When</th><th scope="col">Key</th><th scope="col">Tool</th><th scope="col">Meeting</th><th scope="col">Result</th></tr>{log_rows}</table></div></details>
 </main>""", live=bool(run))
 
 
@@ -505,16 +512,16 @@ def render_recordings(*, meetings: list, shown: int, totals: dict, page: int, pa
         qs = "&".join(x for x in (f"account={a}" if a else "", f"status={st}" if st else "",
                                   f"q={quote(q)}" if q else "", f"page={pg}" if pg > 1 else "") if x)
         return f'<a href="/admin/recordings{"?" + qs if qs else ""}"{" aria-current=page" if cur else ""}>{esc(label)}</a>'
-    search = ('<form method="get" action="/admin/recordings" class="row">'
-              + (f'<input type="hidden" name="account" value="{esc(account)}">' if account else "")
-              + (f'<input type="hidden" name="status" value="{esc(status)}">' if status else "")
-              + f'<label for="rq" class="sr-only">Topic contains</label><input id="rq" type="text" name="q" value="{esc(q)}" '
-              'placeholder="Topic contains..." maxlength="100" autocomplete="off"><button>Search</button></form>')
-    filters = ('<div class="filters"><span id="fa">Account</span><span role="group" aria-labelledby="fa">'
-               + "".join(link(a, status, 1, lab, a == account) for a, lab in ACCOUNT_LABELS)
-               + '</span><span id="fs">Status</span><span role="group" aria-labelledby="fs">'
-               + "".join(link(account, st, 1, lab, st == status) for st, lab in STATUS_LABELS)
-               + f"</span>{search}</div>")
+    def select(name, label, options, cur):
+        opts = "".join(f'<option value="{esc(v)}"{" selected" if v == cur else ""}>{esc(lab)}</option>' for v, lab in options)
+        return (f'<div class="field"><label for="f-{name}">{label}</label>'
+                f'<select id="f-{name}" name="{name}" data-autosubmit>{opts}</select></div>')
+    filters = ('<form method="get" action="/admin/recordings" class="filters">'
+               + select("account", "Account", ACCOUNT_LABELS, account)
+               + select("status", "Status", STATUS_LABELS, status)
+               + f'<div class="field grow"><label for="rq">Topic contains</label><input id="rq" type="text" name="q" '
+               f'value="{esc(q)}" placeholder="e.g. design" maxlength="100" autocomplete="off"></div>'
+               '<button>Show</button></form>')
 
     def cell(label, value, cls=""):
         return f'<td data-label="{label}"{cls}>{value}</td>'
@@ -544,4 +551,4 @@ def render_recordings(*, meetings: list, shown: int, totals: dict, page: int, pa
             '<th scope="col">Date (UTC)</th><th scope="col">Account</th><th scope="col">Team</th>'
             '<th scope="col">Topic</th><th scope="col" class="num">Files</th><th scope="col" class="num">Size</th>'
             f'<th scope="col">Status</th></tr>{rows}</table></div>{nav}</main>')
-    return _document(nonce, body, script=False, title="All recordings - FloLabs Meetings Archive")
+    return _document(nonce, body, script=True, title="All recordings - FloLabs Meetings Archive")
