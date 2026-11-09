@@ -1,0 +1,27 @@
+# Secrets: never commit
+.env
+*.env
+!*.env.example
+.dev.vars
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+.coverage
+
+# Node / Worker
+node_modules/
+.wrangler/
+dist/
+
+# Local state
+*.sqlite
+*.sqlite-journal
+!contracts/**/*.sqlite
+
+# Local dev state (manifest, logs)
+.local/

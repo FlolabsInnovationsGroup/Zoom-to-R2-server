@@ -1,0 +1,20 @@
+{
+  "total_items": 2,
+  "overall_summary": "The team reviewed humanoid gait tests and agreed to retune the ankle controller before the demo.",
+  "items": [
+    {
+      "label": "Gait test results",
+      "start_time": "00:02:10",
+      "end_time": "00:20:00",
+      "summary": "Two of five walking trials fell at the turn.",
+      "short_summary": "Gait trials"
+    },
+    {
+      "label": "Demo plan",
+      "start_time": "00:20:00",
+      "end_time": "00:41:00",
+      "summary": "Demo moved to Nov 20.",
+      "short_summary": "Demo date"
+    }
+  ]
+}

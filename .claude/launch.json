@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web",
+      "runtimeExecutable": "sync/.venv/Scripts/python.exe",
+      "runtimeArgs": ["-m", "zoom_archive.web"],
+      "port": 8080
+    }
+  ]
+}

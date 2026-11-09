@@ -1,0 +1,9 @@
+[Unit]
+Description=FloLabs Zoom to R2 sync
+
+[Service]
+Type=oneshot
+User=zoomarchive
+WorkingDirectory=/opt/zoom-archive/app/sync
+EnvironmentFile=/etc/zoom-archive/env
+ExecStart=/opt/zoom-archive/app/sync/.venv/bin/python -m zoom_archive --mode sync --lookback-days 7

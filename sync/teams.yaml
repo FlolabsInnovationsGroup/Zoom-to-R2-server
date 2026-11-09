@@ -1,0 +1,96 @@
+# Team mapping for the Zoom -> R2 archive (IMPLEMENTATION_PLAN section 3.3, PRD "Team mapping").
+#
+# Rules run top to bottom; the FIRST match wins. A rule matches when the Zoom topic contains one
+# of `contains` (case-insensitive substring), or matches one of `regex` (case-insensitive), or the
+# Zoom meeting ID is listed in `meeting_ids`. Anything unmatched goes to `default_team` and is
+# listed as "unmapped" in the run summary, so no topic is silently lost.
+#
+# R2 has no rename: changing a team after the full backfill means copying every object of that
+# team to new keys. Finalise this file with John before PRD Phase 6.
+#
+# Nothing is hidden by this file: who may read a team is set by the access groups in
+# contracts/access_groups.json (Member excludes hr, one-on-one, operations, project-management, ethics-legal).
+
+default_team: misc
+
+rules:
+  # HR and 1:1 first, so such a topic is never filed under a Member-readable team by an earlier rule.
+  - team: hr
+    contains: ["hr team meeting"]
+    meeting_ids: []          # exact Zoom meeting IDs John marks as HR
+
+  - team: one-on-one
+    regex: ["\\b1\\s*(to|on|:|-)\\s*1\\b", "\\bone[ -]on[ -]one\\b"]
+    meeting_ids: []
+
+  # Restricted teams before every other rule, so a topic like "Ethics & Legal - automation" is never filed
+  # under a team Member can read.
+  - team: project-management
+    contains: ["project management"]
+
+  - team: ethics-legal
+    contains: ["ethics & legal"]
+
+  - team: operations
+    contains: ["operations", "mohamed operations meeting"]
+
+  - team: multi-modal-perception
+    contains: ["multi-modal perception"]
+
+  - team: moodchanger
+    contains: ["moodchanger", "moodchanger meeting"]
+
+  - team: humanoid
+    contains: ["humanoid"]
+
+  - team: frontend
+    contains: ["weekly frontend", "urgent frontend"]   # "Urgent Frontend" is (proposed) in the PRD
+
+  # OPEN QUESTION 2 (John): should "Design Marketing & Data Analytics" stay separate from
+  # Design Team and Data Analytics? Kept separate, as the PRD table has it. It must stay above
+  # the data-analytics rule, because its topic contains "data analytics".
+  - team: design-marketing-data
+    contains: ["design marketing & data analytics"]
+
+  # OPEN QUESTION 1 (John): is "Robotics and Dev Meeting" the same team as "Robotics Team
+  # meeting"? Both map to robotics, as the PRD table has it.
+  - team: robotics
+    contains: ["robotics and dev", "robotics team meeting"]
+
+  - team: design
+    contains: ["design team"]
+
+  - team: automation
+    contains: ["automation"]
+
+  - team: gtm-influencers
+    contains: ["gtm & influencers"]
+
+  - team: data-analytics
+    contains: ["data analytics"]
+
+  - team: iot
+    contains: ["internet of things"]
+
+  - team: backend
+    contains: ["flobrain weekly backend"]
+
+  # OPEN QUESTION 3 (John): which team owns "Technical Meeting"? Kept as its own team
+  # "technical", as the PRD table has it.
+  - team: technical
+    contains: ["technical meeting"]
+
+  - team: space
+    contains: ["space team", "spaceventuresinstitute website update"]   # the second is (proposed)
+
+  - team: neuroscience
+    contains: ["neuroscience team"]
+
+  # Known one-off / test topics that belong in misc on purpose (so they are not reported as
+  # unmapped). Anchored, so a real team topic that merely contains "my meeting" still shows up
+  # in the unmapped report.
+  - team: misc
+    contains: ["n8ntest"]
+    regex:
+      - "^\\s*my meeting\\s*$"
+      - "^\\s*flo labs['’]s zoom meeting\\s*$"

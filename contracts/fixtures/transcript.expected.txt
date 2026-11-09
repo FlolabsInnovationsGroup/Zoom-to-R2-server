@@ -1,0 +1,6 @@
+[00:00:01] John Hazlewood: Good morning everyone, let's start with the homepage review.
+[00:00:05] Sara Ahmed: The new hero section is ready. We tested it on mobile too.
+[00:00:09] Sara Ahmed: Contrast is fixed on the pricing cards.
+[00:01:15] مريم: سنقوم بإطلاق التصميم الجديد يوم الخميس.
+[00:02:02] (inaudible)
+[01:02:30] John Hazlewood: Decision: we ship the redesign on Thursday, Nov 12.

@@ -1,0 +1,20 @@
+{
+  "_doc": "API key format: 'fma_' + base64url (no padding) of 32 random bytes = 47 chars. key_prefix = first 12 chars. sha256 = lowercase hex of sha256(UTF-8 key). Both admin (Python) and worker (TS) tests must reproduce these.",
+  "vectors": [
+    {
+      "key": "fma_AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "key_prefix": "fma_AAECAwQF",
+      "sha256": "f0bfead1803fb382a7fe64ad15e596333ff9bab5a690811fd6bd3673343bbec2"
+    },
+    {
+      "key": "fma___________________________________________8",
+      "key_prefix": "fma_________",
+      "sha256": "93cd9ca24d975f8d78a187fdabbdf05d5c41937af9723e35fc7aa5aadf97f9bd"
+    },
+    {
+      "key": "fma_BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc",
+      "key_prefix": "fma_BwcHBwcH",
+      "sha256": "2fd449bfcae9aa6398ee85def7427fc76649c93ce37620e828d2f56e311aaa18"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+[Unit]
+Description=FloLabs archive: admin page + MCP server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=zoomarchive
+WorkingDirectory=/opt/zoom-archive/app/sync
+EnvironmentFile=/etc/zoom-archive/env
+ExecStart=/opt/zoom-archive/app/sync/.venv/bin/python -m zoom_archive.web
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

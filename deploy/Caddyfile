@@ -1,0 +1,11 @@
+# HTTPS (automatic certificate) in front of the web app. No access log, and the error log is dropped too:
+# it records the full request URI on a 502, and the MCP key is part of the URL.
+{
+	log default {
+		exclude http.log.error http.handlers.reverse_proxy
+	}
+}
+
+{$DOMAIN} {
+	reverse_proxy 127.0.0.1:8080
+}

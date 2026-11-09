@@ -1,0 +1,42 @@
+{
+  "_doc": "Built live by the admin page from the local manifest (outputs.status_json); not written to R2. Sizes in bytes.",
+  "generated_at": "2026-11-09T18:20:00Z",
+  "last_run": {
+    "mode": "backfill",
+    "started_at": "2026-11-09T16:02:11Z",
+    "finished_at": "2026-11-09T18:19:58Z",
+    "files_done": 412,
+    "files_failed": 2,
+    "files_skipped": 31,
+    "bytes": 48211002233,
+    "exit_code": 1
+  },
+  "totals": {
+    "files": 2210,
+    "verified": 1180,
+    "failed": 2,
+    "pending": 1028,
+    "bytes_verified": 140112002233,
+    "bytes_total": 325000000000,
+    "meetings": 961,
+    "meetings_complete": 512
+  },
+  "accounts": [
+    { "account": "pm", "host_email": "PM@flomad.com", "meetings": 449, "bytes": 194000000000, "meetings_complete": 300, "bytes_verified": 120000000000, "mapped": true },
+    { "account": "buddy", "host_email": "zoom.buddy@flolabsinnovations.com", "meetings": 260, "bytes": 60000000000, "meetings_complete": 150, "bytes_verified": 30000000000, "mapped": true },
+    { "account": "john", "host_email": "john@flomadlabs.com", "meetings": 252, "bytes": 71000000000, "meetings_complete": 62, "bytes_verified": 40000000000, "mapped": true }
+  ],
+  "trash": {
+    "meetings": 65,
+    "bytes": 36900000000,
+    "archived": 0,
+    "purge_date": "2026-12-06",
+    "days_left": 27
+  },
+  "failed_files": [
+    { "meeting_key": "pm/design/2026/2026-07-08_2001utc_design-team_ab12cd34", "topic": "Design Team", "recording_type": "shared_screen_with_gallery_view", "last_error": "size mismatch: zoom 1252297942, received 1250000000" }
+  ],
+  "unmapped_topics": [
+    { "topic": "Quick sync", "meetings": 3 }
+  ]
+}

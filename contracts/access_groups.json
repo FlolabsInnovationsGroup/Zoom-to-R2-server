@@ -1,0 +1,54 @@
+{
+  "_doc": "Access groups an API key can be given (switches on /admin). A key can hold any combination. A meeting is readable by a key if ANY of its groups allows the meeting's (account, team). account \"*\" = every account. R2 folders are <account>-account/ (D15). Changing this file = restart the web app, no data moves.",
+  "accounts": {
+    "john@flomadlabs.com": "john",
+    "pm@flomad.com": "pm",
+    "zoom.buddy@flolabsinnovations.com": "buddy"
+  },
+  "groups": {
+    "member": {
+      "label": "Member",
+      "description": "PM account meetings of the listed teams only (allow-list: misc, hr, one-on-one, operations, project-management, ethics-legal and any new team stay hidden)",
+      "allow": [
+        {
+          "account": "pm",
+          "teams": [
+            "multi-modal-perception",
+            "moodchanger",
+            "humanoid",
+            "frontend",
+            "design-marketing-data",
+            "robotics",
+            "design",
+            "automation",
+            "gtm-influencers",
+            "data-analytics",
+            "iot",
+            "backend",
+            "technical",
+            "space",
+            "neuroscience"
+          ]
+        }
+      ]
+    },
+    "buddy": {
+      "label": "Buddy",
+      "description": "All zoom.buddy account meetings",
+      "allow": [
+        {
+          "account": "buddy"
+        }
+      ]
+    },
+    "admin": {
+      "label": "Admin (John)",
+      "description": "Every meeting in every account, including HR and 1:1",
+      "allow": [
+        {
+          "account": "*"
+        }
+      ]
+    }
+  }
+}

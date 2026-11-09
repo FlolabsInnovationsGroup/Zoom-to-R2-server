@@ -1,0 +1,253 @@
+[
+  {
+    "zoom_meeting_id": 81234567890,
+    "zoom_uuid": "aB3/dE+fGhIjKlMnOpQr==",
+    "meeting_key": "pm/design/2026/2026-11-04_1400utc_design-team_1d3552d2",
+    "folder": "pm-account/design/2026/2026-11-04_1400utc_design-team_1d3552d2/",
+    "topic": "Design Team",
+    "account": "pm",
+    "team": "design",
+    "host_email": "PM@flomad.com",
+    "start_time_utc": "2026-11-04T14:00:00Z",
+    "start_time_cairo": "2026-11-04T16:00:00+02:00",
+    "duration_min": 58,
+    "source": "active",
+    "files": [
+      {
+        "name": "design-team_04-11-2026_video-shared_screen_with_gallery_view.mp4",
+        "recording_type": "shared_screen_with_gallery_view",
+        "file_type": "MP4",
+        "zoom_file_id": "81234567890-f1",
+        "zoom_size": 412334112,
+        "r2_key": "pm-account/design/2026/2026-11-04_1400utc_design-team_1d3552d2/design-team_04-11-2026_video-shared_screen_with_gallery_view.mp4",
+        "r2_size": 412334112,
+        "sha256": "b7c7ff896d97cb8084990683e09218851f0009d1968d19b278a3cc017beb472a",
+        "status": "verified"
+      },
+      {
+        "name": "design-team_04-11-2026_video-shared_screen_with_speaker_view-cc.mp4",
+        "recording_type": "shared_screen_with_speaker_view(CC)",
+        "file_type": "MP4",
+        "zoom_file_id": "81234567890-f2",
+        "zoom_size": 236798,
+        "r2_key": "pm-account/design/2026/2026-11-04_1400utc_design-team_1d3552d2/design-team_04-11-2026_video-shared_screen_with_speaker_view-cc.mp4",
+        "r2_size": 236798,
+        "sha256": "53a0defe4f647da8bd6c46b43e097a82781b792a08f20008830abc0dcbd54f90",
+        "status": "verified"
+      },
+      {
+        "name": "design-team_04-11-2026_audio.m4a",
+        "recording_type": "audio_only",
+        "file_type": "M4A",
+        "zoom_file_id": "81234567890-f3",
+        "zoom_size": 55812331,
+        "r2_key": "pm-account/design/2026/2026-11-04_1400utc_design-team_1d3552d2/design-team_04-11-2026_audio.m4a",
+        "r2_size": 55812331,
+        "sha256": "c973a978f8fd8ee79bca6571b8383b69aa7e13a95afe258e7f8afc3e888fd6ca",
+        "status": "verified"
+      },
+      {
+        "name": "design-team_04-11-2026_transcript.vtt",
+        "recording_type": "audio_transcript",
+        "file_type": "TRANSCRIPT",
+        "zoom_file_id": "81234567890-f4",
+        "zoom_size": 61204,
+        "r2_key": "pm-account/design/2026/2026-11-04_1400utc_design-team_1d3552d2/design-team_04-11-2026_transcript.vtt",
+        "r2_size": 61204,
+        "sha256": "ea743b09436b59191f6e04599cb72f343cb316fcab72f6b3d818af44ed01c08b",
+        "status": "verified"
+      },
+      {
+        "name": "design-team_04-11-2026_chat.txt",
+        "recording_type": "chat_file",
+        "file_type": "CHAT",
+        "zoom_file_id": "81234567890-f5",
+        "zoom_size": 1822,
+        "r2_key": "pm-account/design/2026/2026-11-04_1400utc_design-team_1d3552d2/design-team_04-11-2026_chat.txt",
+        "r2_size": 1822,
+        "sha256": "e16e05f7c0fdce13ae2e00086b571b420ee8b838166e7b979a9f408e40591945",
+        "status": "verified"
+      }
+    ],
+    "archived_at": "2026-11-09T03:41:12Z",
+    "script_version": "0.1.0"
+  },
+  {
+    "zoom_meeting_id": 82345678901,
+    "zoom_uuid": "Qw9eRtYuIoPaSdFgHjKl==",
+    "meeting_key": "pm/frontend/2026/2026-11-05_0930utc_weekly-frontend_6d67a695",
+    "folder": "pm-account/frontend/2026/2026-11-05_0930utc_weekly-frontend_6d67a695/",
+    "topic": "Weekly FrontEnd",
+    "account": "pm",
+    "team": "frontend",
+    "host_email": "PM@flomad.com",
+    "start_time_utc": "2026-11-05T09:30:00Z",
+    "start_time_cairo": "2026-11-05T11:30:00+02:00",
+    "duration_min": 41,
+    "source": "active",
+    "files": [
+      {
+        "name": "weekly-frontend_05-11-2026_transcript.vtt",
+        "recording_type": "audio_transcript",
+        "file_type": "TRANSCRIPT",
+        "zoom_file_id": "82345678901-f1",
+        "zoom_size": 40311,
+        "r2_key": "pm-account/frontend/2026/2026-11-05_0930utc_weekly-frontend_6d67a695/weekly-frontend_05-11-2026_transcript.vtt",
+        "r2_size": 40311,
+        "sha256": "8bdc9bb9a0370afb78ab8cbaab91c54d55db95722851e87ca38de14912663bc1",
+        "status": "verified"
+      }
+    ],
+    "archived_at": "2026-11-09T03:41:12Z",
+    "script_version": "0.1.0"
+  },
+  {
+    "zoom_meeting_id": 83456789012,
+    "zoom_uuid": "OpsWeekly000000000000==",
+    "meeting_key": "pm/operations/2026/2026-11-03_0800utc_mohamed-operations-meeting_4d604a95",
+    "folder": "pm-account/operations/2026/2026-11-03_0800utc_mohamed-operations-meeting_4d604a95/",
+    "topic": "Mohamed Operations Meeting",
+    "account": "pm",
+    "team": "operations",
+    "host_email": "PM@flomad.com",
+    "start_time_utc": "2026-11-03T08:00:00Z",
+    "start_time_cairo": "2026-11-03T10:00:00+02:00",
+    "duration_min": 47,
+    "source": "active",
+    "files": [
+      {
+        "name": "mohamed-operations-meeting_03-11-2026_transcript.vtt",
+        "recording_type": "audio_transcript",
+        "file_type": "TRANSCRIPT",
+        "zoom_file_id": "83456789012-f1",
+        "zoom_size": 30111,
+        "r2_key": "pm-account/operations/2026/2026-11-03_0800utc_mohamed-operations-meeting_4d604a95/mohamed-operations-meeting_03-11-2026_transcript.vtt",
+        "r2_size": 30111,
+        "sha256": "5a4b20a4c0541be88da0f28d40af7ce84f7495b02d40539f4a294818c8d69c2b",
+        "status": "verified"
+      }
+    ],
+    "archived_at": "2026-11-09T03:41:12Z",
+    "script_version": "0.1.0"
+  },
+  {
+    "zoom_meeting_id": 85512345678,
+    "zoom_uuid": "/xYz//AbCdEfGhIjKlMn==",
+    "meeting_key": "buddy/misc/2026/2026-07-14_1800utc_meeting-85512345678_e260f2da",
+    "folder": "buddy-account/misc/2026/2026-07-14_1800utc_meeting-85512345678_e260f2da/",
+    "topic": "اجتماع الفريق",
+    "account": "buddy",
+    "team": "misc",
+    "host_email": "zoom.buddy@flolabsinnovations.com",
+    "start_time_utc": "2026-07-14T18:00:00Z",
+    "start_time_cairo": "2026-07-14T21:00:00+03:00",
+    "duration_min": 33,
+    "source": "trash",
+    "files": [
+      {
+        "name": "meeting-85512345678_14-07-2026_audio.m4a",
+        "recording_type": "audio_only",
+        "file_type": "M4A",
+        "zoom_file_id": "85512345678-f1",
+        "zoom_size": 30112000,
+        "r2_key": "buddy-account/misc/2026/2026-07-14_1800utc_meeting-85512345678_e260f2da/meeting-85512345678_14-07-2026_audio.m4a",
+        "r2_size": 30112000,
+        "sha256": "87fe4d5e6ba26bfe09e5fbb1931d851452f9211e242354a0fa6de6e623e538d7",
+        "status": "verified"
+      },
+      {
+        "name": "meeting-85512345678_14-07-2026_transcript.vtt",
+        "recording_type": "audio_transcript",
+        "file_type": "TRANSCRIPT",
+        "zoom_file_id": "85512345678-f2",
+        "zoom_size": 8000,
+        "r2_key": "buddy-account/misc/2026/2026-07-14_1800utc_meeting-85512345678_e260f2da/meeting-85512345678_14-07-2026_transcript.vtt",
+        "r2_size": 8000,
+        "sha256": "f41574cdd30215606c96e145074142e31154e0cf49e7c9c5fc0e05890fdba44a",
+        "status": "verified"
+      }
+    ],
+    "archived_at": "2026-11-09T03:41:12Z",
+    "script_version": "0.1.0"
+  },
+  {
+    "zoom_meeting_id": 86600011122,
+    "zoom_uuid": "JohnHumanoid00000000==",
+    "meeting_key": "john/humanoid/2026/2026-11-08_2130utc_humanoid_6d393ee3",
+    "folder": "john-account/humanoid/2026/2026-11-08_2130utc_humanoid_6d393ee3/",
+    "topic": "Humanoid",
+    "account": "john",
+    "team": "humanoid",
+    "host_email": "john@flomadlabs.com",
+    "start_time_utc": "2026-11-08T21:30:00Z",
+    "start_time_cairo": "2026-11-08T23:30:00+02:00",
+    "duration_min": 150,
+    "source": "active",
+    "files": [
+      {
+        "name": "humanoid_08-11-2026_transcript.vtt",
+        "recording_type": "audio_transcript",
+        "file_type": "TRANSCRIPT",
+        "zoom_file_id": "86600011122-f1",
+        "zoom_size": 120000,
+        "r2_key": "john-account/humanoid/2026/2026-11-08_2130utc_humanoid_6d393ee3/humanoid_08-11-2026_transcript.vtt",
+        "r2_size": 120000,
+        "sha256": "fc7b11e43094bac16bb2f624fdf3823533ba3d7571b2f6f675225771c3b4156a",
+        "status": "verified"
+      },
+      {
+        "name": "humanoid_08-11-2026_summary.json",
+        "recording_type": "summary",
+        "file_type": "SUMMARY",
+        "zoom_file_id": "86600011122-f2",
+        "zoom_size": 13562,
+        "r2_key": "john-account/humanoid/2026/2026-11-08_2130utc_humanoid_6d393ee3/humanoid_08-11-2026_summary.json",
+        "r2_size": 13562,
+        "sha256": "95786b74456175a5dfa8bf474675e5d35da633aaf2fcf69e4069389db3b81dca",
+        "status": "verified"
+      },
+      {
+        "name": "humanoid_08-11-2026_summary_next_steps.json",
+        "recording_type": "summary_next_steps",
+        "file_type": "SUMMARY",
+        "zoom_file_id": "86600011122-f3",
+        "zoom_size": 17540,
+        "r2_key": "john-account/humanoid/2026/2026-11-08_2130utc_humanoid_6d393ee3/humanoid_08-11-2026_summary_next_steps.json",
+        "r2_size": 17540,
+        "sha256": "e955aaecd5b5a826ee2d7b1491d3b3824a4e0349c0a10646b7ea351b37915500",
+        "status": "verified"
+      }
+    ],
+    "archived_at": "2026-11-09T03:41:12Z",
+    "script_version": "0.1.0"
+  },
+  {
+    "zoom_meeting_id": 87700011122,
+    "zoom_uuid": "Hr1to1MeetingUuid0000==",
+    "meeting_key": "john/hr/2026/2026-10-20_1000utc_hr-team-meeting_7345cbc9",
+    "folder": "john-account/hr/2026/2026-10-20_1000utc_hr-team-meeting_7345cbc9/",
+    "topic": "HR team meeting",
+    "account": "john",
+    "team": "hr",
+    "host_email": "john@flomadlabs.com",
+    "start_time_utc": "2026-10-20T10:00:00Z",
+    "start_time_cairo": "2026-10-20T12:00:00+02:00",
+    "duration_min": 25,
+    "source": "active",
+    "files": [
+      {
+        "name": "hr-team-meeting_20-10-2026_transcript.vtt",
+        "recording_type": "audio_transcript",
+        "file_type": "TRANSCRIPT",
+        "zoom_file_id": "87700011122-f1",
+        "zoom_size": 9000,
+        "r2_key": "john-account/hr/2026/2026-10-20_1000utc_hr-team-meeting_7345cbc9/hr-team-meeting_20-10-2026_transcript.vtt",
+        "r2_size": 9000,
+        "sha256": "fdf3f42f0498d777e0414cd9b455329314027fd09edfc06d7ce377cdc86952da",
+        "status": "verified"
+      }
+    ],
+    "archived_at": "2026-11-09T03:41:12Z",
+    "script_version": "0.1.0"
+  }
+]
