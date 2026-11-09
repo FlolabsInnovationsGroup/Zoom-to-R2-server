@@ -133,7 +133,8 @@ def create_app(cfg: dict | None = None) -> Starlette:
         return sid == session_id and ts.timestamp() > auth["valid_after"]
 
     def same_origin(request: Request) -> bool:
-        return request.headers.get("origin") == origin_of(request)
+        got = request.headers.get("origin")
+        return bool(got) and got in (origin_of(request), cfg.get("origin"))
 
     def html(body: str, nonce: str, status: int = 200) -> HTMLResponse:
         return HTMLResponse(body, status, {"Cache-Control": "no-store", "Content-Security-Policy": admin_page.csp(nonce)})
@@ -150,7 +151,7 @@ def create_app(cfg: dict | None = None) -> Starlette:
         nonce = token_urlsafe(12)
         page = admin_page.render_admin(status=live_status(manifest_path), keys=keys, log=[dict(r) for r in calls],
                                        run=runctl.running(manifest_path), run_log=runctl.log_tail(manifest_path, 15),
-                                       groups=GROUPS, origin=origin_of(request), nonce=nonce,
+                                       groups=GROUPS, origin=cfg.get("origin") or origin_of(request), nonce=nonce,
                                        new_key=new_key, error=error)
         return html(page, nonce, status)
 

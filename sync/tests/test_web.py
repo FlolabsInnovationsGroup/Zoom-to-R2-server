@@ -351,6 +351,19 @@ def test_post_needs_matching_origin(client):
     assert client.post("/admin", data={"action": "revoke", "id": "x"}).status_code == 403
 
 
+def test_codespace_address_is_trusted(web_env, monkeypatch):
+    monkeypatch.setenv("CODESPACE_NAME", "fluffy-robot")
+    monkeypatch.setenv("GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN", "app.github.dev")
+    cfg = load_web_config()
+    assert cfg["origin"] == "https://fluffy-robot-8080.app.github.dev"
+    with TestClient(web.create_app(cfg), base_url="http://localhost") as c:
+        ok = c.post("/admin/login", data={"password": PASSWORD}, follow_redirects=False,
+                    headers={"Origin": "https://fluffy-robot-8080.app.github.dev"})
+        assert ok.status_code == 303
+        assert c.post("/admin/login", data={"password": PASSWORD},
+                      headers={"Origin": "https://other-8080.app.github.dev"}).status_code == 403
+
+
 def test_logout(client):
     login(client)
     assert client.post("/admin/logout", headers=ORIGIN, follow_redirects=False).status_code == 303

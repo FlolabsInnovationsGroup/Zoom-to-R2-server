@@ -109,11 +109,20 @@ def request_stop(manifest_path: str) -> None:
         _p(manifest_path, "sync.stop").write_text(str(time.time()), encoding="utf-8")
 
 
-def start(manifest_path: str, mode: str, concurrency: int = 6) -> bool:
+def default_concurrency() -> int:
+    """Parallel files for a run started from the admin page: SYNC_CONCURRENCY (1-8), else 6."""
+    try:
+        return max(1, min(8, int(os.environ.get("SYNC_CONCURRENCY") or 6)))
+    except ValueError:
+        return 6
+
+
+def start(manifest_path: str, mode: str, concurrency: int | None = None) -> bool:
     """Start `python -m zoom_archive --mode <mode>` in the background, output appended to sync.log.
     False if a run is already going. The child gets this process's environment (Zoom + R2 settings)."""
     if mode not in MODES:
         return False
+    concurrency = concurrency or default_concurrency()
     with _lock(manifest_path):
         return _start_locked(manifest_path, mode, concurrency)
 

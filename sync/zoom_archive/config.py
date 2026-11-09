@@ -84,6 +84,12 @@ def load_web_config() -> dict:
         "keys_db_path": g("KEYS_DB_PATH", str(REPO_ROOT / ".local" / "keys.sqlite")),
         "bind": g("ADMIN_BIND", "127.0.0.1:8080"),
     }
+    # The address people open the page at, when a proxy in front changes Host/scheme (e.g. a GitHub Codespace's
+    # forwarded port). POSTs from it pass the same-origin check. Inside a Codespace it is worked out automatically.
+    port = cfg["bind"].rpartition(":")[2]
+    codespace = g("CODESPACE_NAME"), g("GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN")
+    cfg["origin"] = g("ADMIN_ORIGIN").rstrip("/") or (
+        f"https://{codespace[0]}-{port}.{codespace[1]}" if all(codespace) else "")
     cfg["search_db_path"] = g("SEARCH_DB_PATH") or search.default_path(cfg["manifest_path"])
     missing = [n for n, v in (("ADMIN_PASSWORD", cfg["admin_password"]), ("ADMIN_SECRET_KEY", cfg["secret_key"]),
                               ("R2_ACCESS_KEY_ID", cfg["r2"].r2_access_key_id),
