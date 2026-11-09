@@ -1,6 +1,6 @@
 # Deploying on Vercel (serverless)
 
-The admin page, the MCP server and the daily Zoom to R2 sync run as one Vercel function (`app.py`).
+The admin page, the MCP server and the daily Zoom to R2 sync run as one Vercel function (`api/index.py`).
 No server and no disk: the three small SQLite databases (copy progress, API keys, search index) live in the
 R2 bucket under `_system/`, next to the recordings.
 
@@ -28,7 +28,7 @@ It never overwrites anything already in R2.
 ## 2. Create the Vercel project
 
 1. In Vercel: **Add New, then Project**, and import `FlolabsInnovationsGroup/Zoom-to-R2-server`.
-2. **Root Directory:** the repository root (leave it empty). Framework preset: **Other**. Vercel finds `app.py`,
+2. **Root Directory:** the repository root (leave it empty). Framework preset: **Other**. Vercel finds `api/index.py`,
    `requirements.txt` and `vercel.json` on its own.
 3. Add the environment variables below (Settings, then Environment Variables, for **Production**).
 4. Deploy. Then open `https://<your-domain>/admin` and log in.
@@ -58,7 +58,7 @@ Optional:
 - `SYNC_DEADLINE_SECONDS`: default `480`. After this, a run starts no new files and the rest waits for the next run.
 - `R2_READ_ACCESS_KEY_ID` / `R2_READ_SECRET_ACCESS_KEY`: a read-only R2 token for the MCP's download links.
 
-`DB_IN_R2=1` is set by `app.py` itself. Never put these values in the repository.
+`DB_IN_R2=1` is set by `api/index.py` itself. Never put these values in the repository.
 
 ## 4. Local backup of the databases
 

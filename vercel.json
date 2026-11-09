@@ -1,11 +1,14 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
-    "app.py": {
+    "api/index.py": {
       "maxDuration": 800,
       "includeFiles": "{sync/zoom_archive/**,sync/teams.yaml,contracts/**}"
     }
   },
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/api/index" }
+  ],
   "crons": [
     { "path": "/api/cron/sync", "schedule": "0 3 * * *" }
   ]
