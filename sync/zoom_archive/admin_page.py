@@ -157,6 +157,11 @@ form.filters{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-end;marg
 form.filters .grow{flex:1;min-width:180px}
 select{font:inherit;min-height:36px;padding:5px 30px 5px 10px;border:1px solid var(--ctl);border-radius:8px;background:var(--card);color:var(--text)}
 @media (pointer:coarse){select{min-height:44px}}
+.nowcopy{list-style:none;margin:4px 0 0;padding:0;display:grid;gap:6px;width:100%}
+.nowcopy li{display:grid;grid-template-columns:1fr auto;gap:2px 12px;align-items:baseline}
+.nowcopy .topic{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nowcopy progress{grid-column:1/-1;margin:2px 0 0}
+.run>progress{width:100%}
 .techlog{width:100%;margin-top:6px}.techlog summary{cursor:pointer;font-size:.75rem;color:var(--muted)}
 .runlog{margin-top:8px;max-height:14rem;overflow:auto;flex:none;width:100%}
 button:disabled,button:disabled:hover,button:disabled:active{background:var(--sunk);border-color:var(--line);color:var(--muted);opacity:1;cursor:not-allowed;transform:none;filter:none}
@@ -217,17 +222,20 @@ const n=document.getElementById(b.dataset.copy),l=b.dataset.label||(b.dataset.la
 const done=()=>{b.textContent="Copied";setTimeout(()=>{b.textContent=l},2000)};
 (navigator.clipboard?navigator.clipboard.writeText(n.textContent):Promise.reject()).then(done,()=>{const r=document.createRange();r.selectNodeContents(n);const s=getSelection();s.removeAllRanges();s.addRange(r);b.textContent="Press Ctrl+C"})});
 document.addEventListener("submit",e=>{const f=e.target,m=f.dataset.confirm;if(m&&!confirm(m)){e.preventDefault();return}
-if(f.dataset.busy){const b=f.querySelector("button");setTimeout(()=>{b.disabled=true;b.textContent="Checking..."},0);
-const h=document.createElement("div");h.className="hint";h.setAttribute("role","status");h.textContent=f.dataset.busy;f.after(h)}
+if(f.hasAttribute("data-busy")){e.preventDefault();const b=f.querySelector("button");b.disabled=true;b.textContent="Checking...";
+fetch(f.action,{method:"POST",body:new URLSearchParams(new FormData(f)),credentials:"same-origin"}).then(()=>refresh()).catch(()=>{});
+live=true;setTimeout(refresh,2500);return}
 if(f.hasAttribute("data-needs-group")){const bs=f.querySelectorAll("input[name=groups]");const ok=[...bs].some(b=>b.checked);
-if(bs.length)bs[0].setCustomValidity(ok?"":"Choose at least one access group.");if(!ok){bs[0].reportValidity();e.preventDefault()}}});
+if(bs.length)bs[0].setCustomValidity(ok?"":"Choose at least one access group.");if(!ok){bs[0].reportValidity();e.preventDefault()}}
+if(!e.defaultPrevented&&f.method==="post"){const b=f.querySelector("button");if(b)setTimeout(()=>{b.disabled=true},0)}});
 document.addEventListener("change",e=>{if(e.target.name==="groups")e.target.form.querySelectorAll("input[name=groups]").forEach(b=>b.setCustomValidity(""))});
 document.addEventListener("change",e=>{if(e.target.matches("select[data-autosubmit]"))e.target.form.submit()});
-let live=!!document.body.dataset.live;
-setInterval(()=>{if(!live)return;fetch(location.pathname,{credentials:"same-origin"}).then(r=>r.ok?r.text():null).then(t=>{if(!t)return;
+var live=!!document.body.dataset.live;
+function refresh(){return fetch(location.pathname,{credentials:"same-origin"}).then(r=>r.ok?r.text():null).then(t=>{if(!t)return;
 const d=new DOMParser().parseFromString(t,"text/html"),n=d.getElementById("sync"),o=document.getElementById("sync");if(!n||!o)return;
 const open=!!o.querySelector("details[open]");o.innerHTML=n.innerHTML;if(open){const x=o.querySelector("details");if(x)x.open=true}
-live=d.body.dataset.live!==undefined}).catch(()=>{})},5000);
+live=d.body.dataset.live!==undefined}).catch(()=>{})}
+setInterval(()=>{if(live)refresh()},4000);
 const c=document.getElementById("created");if(c){c.scrollIntoView({block:"nearest"});c.focus({preventScroll:true})}
 """
 
@@ -285,8 +293,9 @@ def render_login(nonce: str, error: str = "") -> str:
 
 def _skipped(t: dict) -> str:
     n = t.get("skipped_meetings") or 0
-    return (f'<p class="hint">Not copied: {num(n)} meetings whose transcript has under 300 words or no transcript '
-            f'({gb(t.get("skipped_bytes"))}). <a href="/admin/recordings?status=skipped">See them</a></p>') if n else ""
+    return (f'<p class="hint">Not copied: {num(n)} meetings whose transcript has under 300 words or no transcript, '
+            f'or that Zoom no longer has ({gb(t.get("skipped_bytes"))}). '
+            f'<a href="/admin/recordings?status=skipped">See them</a></p>') if n else ""
 
 
 def duration(seconds: float) -> str:
@@ -381,15 +390,40 @@ def _cloud_card(lock: dict, totals: dict | None = None) -> str:
     lock: the sync lock object ({"running", "since"} or {"running": False, "last": summary})."""
     t = totals or {}
     left_b = max((t.get("bytes_total") or 0) - (t.get("bytes_verified") or 0), 0)
+    live = ""
     if lock.get("running"):
-        state = '<span class="tag ok">Checking Zoom</span> New recordings are being copied to R2 now.'
+        p = lock.get("progress") or {}
+        if p.get("phase") == "copying" and p.get("files_total"):
+            done_b, total_b = p.get("bytes_done", 0), max(p.get("bytes_total", 0), 1)
+            secs = max((p.get("at") or 0) - (p.get("copy_started") or 0), 1)
+            speed = done_b / secs if done_b else 0
+            rate = f" at {speed / 1e6:,.1f} MB/s" if speed else ""
+            eta = f", about {duration((total_b - done_b) / speed)} left" if speed and total_b > done_b else ""
+            state = (f'<span class="tag ok">Copying</span> {num(p.get("files_done", 0))} of {num(p["files_total"])} new files, '
+                     f'{gb(done_b)} of {gb(total_b)}{rate}{eta}.')
+            items = "".join(
+                f'<li><span class="topic" dir="auto">{esc(c.get("topic") or "(no topic)")}</span>'
+                f'<span class="hint">{esc(TYPE_NAMES.get(c.get("type"), (c.get("type") or "file").lower()))} &middot; {int(c.get("pct", 0))}%</span>'
+                f'<progress class="thin" max="100" value="{int(c.get("pct", 0))}"></progress></li>'
+                for c in p.get("current") or [])
+            live = (f'<progress max="{total_b}" value="{min(done_b, total_b)}" aria-label="Copy progress"></progress>'
+                    + (f'<p class="hint">Copying now:</p><ul class="nowcopy">{items}</ul>' if items else ""))
+        elif p.get("phase") == "copying":
+            state = '<span class="tag ok">Up to date</span> Nothing new to copy. Finishing the check.'
+        elif p.get("phase") == "finishing":
+            state = '<span class="tag ok">Finishing</span> Saving meeting details and the search index.'
+        else:
+            state = '<span class="tag ok">Checking Zoom</span> Reading the list of recordings (about a minute).'
     elif not t.get("files"):
         state = '<span class="tag">Idle</span> Nothing synced yet.'
     else:
         state = (f'<span class="tag ok">Up to date</span> Everything found in Zoom is in R2.' if not left_b else
                  f'<span class="tag">Waiting</span> {gb(left_b)} still to copy on the next check.')
     last = lock.get("last") or {}
-    if last.get("finished"):
+    if lock.get("died"):
+        state += ('<div class="hint">The previous check stopped unexpectedly. Press Check Zoom now to carry on; '
+                  'anything already copied is kept.</div>')
+    elif last.get("finished") and not lock.get("running"):
         what = (f'failed: {esc(last["error"])}' if last.get("error") else
                 f'copied {num(last.get("files", 0))} files ({gb(last.get("bytes", 0))})'
                 + (f', {num(last["failed"])} failed' if last.get("failed") else "")
@@ -397,13 +431,18 @@ def _cloud_card(lock: dict, totals: dict | None = None) -> str:
         by = "the daily check" if last.get("by") == "cron" else "Check Zoom now"
         state += f'<div class="hint">Last check {esc(when(last["finished"]))} by {by}: {what}.</div>'
     off = " disabled" if lock.get("running") else ""
-    btn = (f'<form method="post" data-busy="Checking Zoom... this can take a few minutes. Keep this page open.">'
-           f'<input type="hidden" name="action" value="sync_now"><button class="primary"{off}>Check Zoom now</button></form>')
+    btn = (f'<form method="post" action="/admin" data-busy>'
+           f'<input type="hidden" name="action" value="sync_now"><button class="primary"{off}>'
+           f'{"Checking..." if off else "Check Zoom now"}</button></form>')
     hint = ("Zoom is checked automatically once a day. New recordings are copied to R2, newest first; "
             "anything not finished in one check is picked up by the next.")
     return (f'<section class="card" aria-labelledby="rc"><div class="run"><div><h3 id="rc">Zoom to R2</h3>'
             f'<div class="state" role="status" aria-live="polite">{state}</div><div class="hint">{hint}</div></div>'
-            f'<div class="btns">{btn}</div></div></section>')
+            f'<div class="btns">{btn}</div>{live}</div></section>')
+
+
+TYPE_NAMES = {"MP4": "video", "M4A": "audio", "TRANSCRIPT": "transcript", "CC": "captions", "CHAT": "chat",
+              "SUMMARY": "summary", "TIMELINE": "timeline"}
 
 
 def _status(s) -> str:
@@ -529,7 +568,7 @@ def render_admin(*, status, keys: list, log: list, groups: dict, origin: str, no
 
 
 STATE_TAGS = {"archived": ("ok", "Archived"), "pending": ("", "Pending"), "partial": ("warn", "Pending (partial)"),
-              "failed": ("bad", "Failed"), "skipped": ("", "Not copied (short transcript)")}
+              "failed": ("bad", "Failed"), "skipped": ("", "Not copied")}
 ACCOUNT_LABELS = (("", "All"), ("pm", "PM"), ("john", "John"), ("buddy", "Buddy"))
 ACCOUNT_NAMES = dict(ACCOUNT_LABELS)
 STATUS_LABELS = (("", "All"), ("archived", "Archived"), ("pending", "Pending"), ("failed", "Failed"),

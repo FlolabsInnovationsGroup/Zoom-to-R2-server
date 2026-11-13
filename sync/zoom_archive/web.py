@@ -36,6 +36,7 @@ from .mcp_server import CALLER, Archive, build_mcp
 from .outputs import status_json
 
 COOKIE = "fl_session"
+NEW_KEY_COOKIE = "fl_new_key"  # signed, 2 minutes, read once: carries a just-created key across the redirect
 SESSION_SECONDS = 12 * 3600
 FAIL_DELAY = 1.0  # seconds a wrong password waits before the answer
 MAX_FAILS, LOCKOUT = 5, 15 * 60  # this many wrong passwords in a row lock the login for LOCKOUT seconds (all clients)
@@ -149,6 +150,8 @@ def create_app(cfg: dict | None = None) -> Starlette:
     def html(body: str, nonce: str, status: int = 200) -> HTMLResponse:
         return HTMLResponse(body, status, {"Cache-Control": "no-store", "Content-Security-Policy": admin_page.csp(nonce)})
 
+    flash = URLSafeTimedSerializer(cfg["secret_key"], salt="new-key")
+
     def admin_view(request: Request, status: int = 200, new_key: str = "", error: str = "") -> HTMLResponse:
         c = connect(db_path)
         try:
@@ -159,11 +162,12 @@ def create_app(cfg: dict | None = None) -> Starlette:
         finally:
             c.close()
         keys = [{**dict(r), "state": key_state(r), "groups": parse_groups(r["access_groups"])} for r in rows]
+        names_all = {k["id"]: k["name"] for k in keys}
+        keys = [k for k in keys if k["state"] != "revoked"]  # revoked keys are history, not shown
         cloud = None
         if serverless:
             entries, last_used = r2db.recent_access(rw)
-            names = {k["id"]: k["name"] for k in keys}
-            calls = [{**e, "name": names.get(e.get("key_id"))} for e in entries]
+            calls = [{**e, "name": names_all.get(e.get("key_id"))} for e in entries]
             for k in keys:
                 k["last_used_at"] = last_used.get(k["id"]) or k.get("last_used_at")
             cloud = r2db.lock_state(rw)
@@ -223,7 +227,16 @@ def create_app(cfg: dict | None = None) -> Starlette:
         if not signed_in(request):
             return RedirectResponse("/admin/login", 303) if request.method == "GET" else PlainTextResponse("Forbidden", 403)
         if request.method == "GET":
-            return admin_view(request)
+            shown = ""
+            if request.cookies.get(NEW_KEY_COOKIE):  # a key created just now: shown once, then forgotten
+                try:
+                    shown = flash.loads(request.cookies[NEW_KEY_COOKIE], max_age=120)
+                except BadSignature:
+                    shown = ""
+            resp = admin_view(request, new_key=shown)
+            if request.cookies.get(NEW_KEY_COOKIE):
+                resp.delete_cookie(NEW_KEY_COOKIE, path="/admin")
+            return resp
         if not same_origin(request):
             return PlainTextResponse("Forbidden", 403)
         form = await request.form()
@@ -278,9 +291,11 @@ def create_app(cfg: dict | None = None) -> Starlette:
                 await asyncio.to_thread(r2db.edit, rw, "keys", apply)
             else:
                 apply(db_path)
+        resp = RedirectResponse("/admin", 303)  # a refresh after this never re-sends the form (no duplicate keys)
         if action == "create":
-            return admin_view(request, new_key=new_key)
-        return RedirectResponse("/admin", 303)
+            resp.set_cookie(NEW_KEY_COOKIE, flash.dumps(new_key), max_age=120, httponly=True, samesite="strict",
+                            secure=request.url.hostname not in LOCAL_HOSTS, path="/admin")
+        return resp
 
     async def cron_sync(request: Request):
         """Vercel cron (daily): Authorization: Bearer <CRON_SECRET>."""

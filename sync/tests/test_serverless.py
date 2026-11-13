@@ -70,7 +70,8 @@ def test_keys_are_saved_to_r2_and_mcp_calls_are_logged(cclient, tmp_path):
     r = cclient.post("/admin/login", data={"password": PASSWORD}, headers=ORIGIN)
     assert r.status_code == 200 and "Check Zoom now" in r.text and "Scan Zoom" not in r.text
     r = admin_post(cclient, {"action": "create", "name": "Cloud key", "groups": ["admin"]})
-    assert r.status_code == 200
+    assert r.status_code == 303
+    r = cclient.get("/admin")
     key = API_KEY_RE.search(r.text).group(0) if API_KEY_RE.search(r.text) else re.search(r"fma_[\w-]{43}", r.text).group(0)
     rows = r2_sqlite(cclient.bucket, "_system/keys.sqlite", tmp_path, "SELECT name, revoked_at FROM api_keys")
     assert ("Cloud key", None) in rows  # the key list lives in R2, not on the function's disk
@@ -204,3 +205,42 @@ def test_a_running_sync_keeps_its_lock_fresh(cloud_env):
     assert r2db.renew_lock(r2, token)
     assert r2db.take_lock(r2, "admin") is None  # renewed, so a second run still waits
     assert not r2db.renew_lock(r2, "someone-else")
+
+
+def test_live_progress_is_published_while_copying(cloud_env, fake_zoom, monkeypatch):
+    three_users(fake_zoom)
+    monkeypatch.setattr(cloud, "PROGRESS_EVERY", 0.02)
+    seen = []
+    real = r2db.renew_lock
+
+    def spy(r2, token, progress=None):
+        if progress:
+            seen.append(progress)
+        return real(r2, token, progress)
+
+    monkeypatch.setattr(r2db, "renew_lock", spy)
+    got = cloud.run_sync("cron")
+    assert got["ok"] and got["files"] > 0
+    copying = [p for p in seen if p["phase"] == "copying" and p["files_total"]]
+    assert copying and copying[-1]["files_total"] >= got["files"]
+    assert all(p["bytes_done"] <= p["bytes_total"] for p in copying)
+
+
+def test_admin_card_shows_a_progress_bar_while_copying():
+    from zoom_archive import admin_page
+    lock = {"running": True, "progress": {"phase": "copying", "files_total": 47, "files_done": 12, "bytes_total": 7e9,
+            "bytes_done": 1.4e9, "copy_started": 100.0, "at": 130.0,
+            "current": [{"topic": "Robotics Team meeting", "type": "MP4", "pct": 63}]}}
+    html = admin_page._cloud_card(lock, {"files": 10})
+    assert "12 of 47 new files" in html and "<progress" in html and "Robotics Team meeting" in html and "video" in html
+    assert "stopped unexpectedly" in admin_page._cloud_card({"running": False, "died": True}, {"files": 10})
+
+
+def test_a_dead_runs_lock_frees_itself_after_two_minutes(cloud_env):
+    r2 = R2(load_config())
+    assert r2db.take_lock(r2, "cron")
+    old = json.loads(admin_s3().get_object(Bucket=cloud_env["bucket"], Key=r2db.LOCK_KEY)["Body"].read())
+    admin_s3().put_object(Bucket=cloud_env["bucket"], Key=r2db.LOCK_KEY,
+                          Body=json.dumps({**old, "since": old["since"] - 3 * 60}).encode())  # silent for 3 minutes
+    assert r2db.lock_state(r2).get("died") is True
+    assert r2db.take_lock(r2, "admin")  # the next check can start

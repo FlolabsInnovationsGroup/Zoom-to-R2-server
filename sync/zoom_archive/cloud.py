@@ -19,7 +19,22 @@ from .zoom import Zoom, redact
 
 log = logging.getLogger("zoom_archive")
 LOOKBACK_DAYS = 7
-SAVE_EVERY = 60  # seconds: progress saved to R2 and the lock renewed while a run is copying
+SAVE_EVERY = 60     # seconds between saves of the copy progress file to R2 during a run
+PROGRESS_EVERY = 5  # seconds between live-progress updates (and lock renewals) for the admin page
+
+
+def progress(ctx) -> dict:
+    """What the admin page shows while a run works."""
+    with ctx.lock:
+        live = [dict(x) for x in ctx.live.values()]
+        n = dict(ctx.n)
+    return {"phase": ctx.phase, "files_total": n.get("queued", 0),
+            "files_done": n.get("done", 0) + n.get("failed", 0) + n.get("gone", 0),
+            "failed": n.get("failed", 0), "bytes_total": n.get("queued_bytes", 0),
+            "bytes_done": n.get("done_bytes", 0) + sum(x["done"] for x in live),
+            "copy_started": ctx.copy_started, "at": time.time(),
+            "current": [{"topic": x["topic"][:80], "type": x["type"],
+                         "pct": round(100 * x["done"] / x["size"]) if x["size"] else 0} for x in live][:8]}
 
 
 def deadline_seconds() -> int:
@@ -54,14 +69,18 @@ def run_sync(who: str) -> dict:
         done = threading.Event()
 
         def keep_saving():
-            """Copied files show up in R2's progress file within a minute, and a cut-off run loses at most that."""
-            while not done.wait(SAVE_EVERY):
-                if not r2db.renew_lock(r2, token):
+            """Live progress every few seconds; copied files reach R2's progress file within a minute, so a
+            cut-off run loses at most that."""
+            last_save = time.time()
+            while not done.wait(PROGRESS_EVERY):
+                if not r2db.renew_lock(r2, token, progress(ctx)):
                     log.warning("sync lock taken over by another run")
-                try:
-                    r2.write(r2db.KEYS["manifest"], db.serialize())
-                except Exception as e:  # noqa: BLE001 - try again next minute
-                    log.warning("progress save failed: %s", redact(e))
+                if time.time() - last_save >= SAVE_EVERY:
+                    last_save = time.time()
+                    try:
+                        r2.write(r2db.KEYS["manifest"], db.serialize())
+                    except Exception as e:  # noqa: BLE001 - try again next minute
+                        log.warning("progress save failed: %s", redact(e))
 
         saver = threading.Thread(target=keep_saving, daemon=True)
         saver.start()
@@ -77,7 +96,7 @@ def run_sync(who: str) -> dict:
         if ctx.changed and os.path.isfile(cfg.search_db_path):
             r2db.push(r2, "search")
         summary.update(ok=code in (0, 1), files=ctx.n["done"], failed=ctx.n["failed"], skipped=ctx.n["skipped"],
-                       bytes=ctx.n["bytes"], meetings=ctx.n["meetings"], left=left)
+                       gone=ctx.n["gone"], bytes=ctx.n["bytes"], meetings=ctx.n["meetings"], left=left)
     except Exception as e:  # noqa: BLE001 - reported on the admin page, never a token
         log.error("sync failed: %s", redact(f"{type(e).__name__}: {e}"))
         summary.update(ok=False, error=redact(f"{type(e).__name__}: {e}"))

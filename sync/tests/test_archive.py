@@ -270,3 +270,15 @@ def test_unreadable_transcript_never_stops_the_scan(env, fake_zoom, bucket, run_
     assert code == 0 and "scan done" in out, out
     rows = [r for r in manifest_rows(env["MANIFEST_PATH"]) if r["topic"] == "Weekly FrontEnd"]
     assert rows and all(r["status"] == "pending" for r in rows)  # unknown word count: copied, not skipped
+
+
+def test_a_file_zoom_no_longer_has_is_not_a_failure(env, fake_zoom, bucket, run_cli):
+    m = three_users(fake_zoom)
+    video = next(f for f in m["frontend"]["recording_files"] if f["file_type"] != "TRANSCRIPT")
+    fake_zoom.download_faults[video["id"]] = [{"status": 404}] * 10  # link and refreshed link: 404
+    code, out = run_cli("--mode", "backfill")
+    assert code == 0, out  # not counted as failed
+    row = next(r for r in manifest_rows(env["MANIFEST_PATH"]) if r["zoom_file_id"] == str(video["id"]))
+    assert row["status"] == "skipped" and "no longer has" in row["last_error"]
+    code, out = run_cli("--mode", "backfill")  # and never retried
+    assert sum(str(video["id"]) in r["path"] for r in fake_zoom.requests_to("/rec/download")) <= 2 * 2

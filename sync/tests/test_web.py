@@ -398,7 +398,8 @@ def test_status_is_live_from_manifest(client, env, monkeypatch, tmp_path):
 def test_create_key_shows_once_and_stores_hash_only(client):
     login(client)
     r = admin_post(client, {"action": "create", "name": "Ahsan CLI", "groups": ["member", "buddy"]})
-    assert r.status_code == 200
+    assert r.status_code == 303  # redirect: refreshing the page can never create a second key
+    r = client.get("/admin")
     key = re.search(r"fma_[A-Za-z0-9_-]{43}", r.text).group(0)
     assert API_KEY_RE.match(key)
     assert f"claude mcp add --transport http flolabs-meetings http://localhost/mcp/{key}" in r.text
@@ -411,14 +412,21 @@ def test_create_key_shows_once_and_stores_hash_only(client):
     assert admin_post(client, {"action": "create", "name": "x"}).status_code == 400  # no group ticked
 
 
-def test_revoked_key_switches_are_disabled(client):
+def test_revoked_keys_are_not_listed(client):
     login(client)
     make_key(client, ["member"], revoked_at="2026-11-01T00:00:00Z")
-    page = client.get("/admin").text
-    assert '<button disabled>Save access</button>' in page
-    assert 'name="groups" value="member" checked disabled' in page
+    assert "Save access" not in client.get("/admin").text
     make_key(client, ["buddy"])
-    assert page.count("Save access") == 1 and client.get("/admin").text.count("<button>Save access</button>") == 1
+    assert client.get("/admin").text.count("<button>Save access</button>") == 1
+
+
+def test_one_create_makes_one_key(client):
+    login(client)
+    admin_post(client, {"action": "create", "name": "Only once", "groups": ["admin"]})
+    for _ in range(3):  # reloading the page after creating a key
+        client.get("/admin")
+    db = sqlite3.connect(client.db)
+    assert db.execute("SELECT COUNT(*) FROM api_keys WHERE name = 'Only once'").fetchone()[0] == 1
 
 
 def test_key_vectors():

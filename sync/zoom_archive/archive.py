@@ -40,6 +40,9 @@ class Ctx:
         self.fallback = False
         self.stop = threading.Event()
         self.deadline: float | None = None  # serverless: start no new file after this time (they stay pending)
+        self.phase = "listing"             # listing -> copying -> finishing (shown live on the admin page)
+        self.live: dict[str, dict] = {}    # files being copied right now: {fid: {topic, type, done, size}}
+        self.copy_started: float | None = None
 
 
 # --- users and listing -------------------------------------------------------------------------
@@ -188,17 +191,21 @@ def open_download(ctx: Ctx, row: dict, f: dict):
     return ctx.zoom.request(url, stream=True)
 
 
-def stoppable(ctx: Ctx, chunks):
+def stoppable(ctx: Ctx, chunks, fid: str | None = None):
     for c in chunks:
         if ctx.stop.is_set():
             raise Stopped()
+        if fid in ctx.live:
+            ctx.live[fid]["done"] += len(c)
         yield c
 
 
 def transfer(ctx: Ctx, row: dict, f: dict) -> str:
     for attempt in range(3):
         try:
-            chunks = stoppable(ctx, ctx.zoom.chunks(open_download(ctx, row, f)))
+            if row["zoom_file_id"] in ctx.live:
+                ctx.live[row["zoom_file_id"]]["done"] = 0  # a retry starts the file again
+            chunks = stoppable(ctx, ctx.zoom.chunks(open_download(ctx, row, f)), row["zoom_file_id"])
             return ctx.r2.upload_stream(row["r2_key"], chunks, row["zoom_size"],
                                         exact=row["file_type"] not in SIZE_UNRELIABLE)
         except Transient:
@@ -208,6 +215,11 @@ def transfer(ctx: Ctx, row: dict, f: dict) -> str:
                 raise
             time.sleep(zmod.BACKOFF * 2 ** attempt)
     raise AssertionError("unreachable")
+
+
+def gone_from_zoom(e: Exception) -> bool:
+    """Zoom answered 404 even with a fresh download link, or no longer lists the file: it is gone for good."""
+    return (isinstance(e, HTTPError) and e.status == 404) or isinstance(e, StopIteration)
 
 
 def archive_file(ctx: Ctx, row: dict, f: dict) -> None:
@@ -220,6 +232,8 @@ def archive_file(ctx: Ctx, row: dict, f: dict) -> None:
     if ctx.stop.is_set() or (ctx.deadline and time.time() > ctx.deadline):
         return  # stays pending for the next run
     ctx.db.set_status(fid, "pending", attempt=True)
+    with ctx.lock:
+        ctx.live[fid] = {"topic": row.get("topic") or "", "type": row.get("file_type") or "", "done": 0, "size": size}
     try:
         exact = row["file_type"] not in SIZE_UNRELIABLE
         uploaded = not exact or ctx.r2.head(key) != size
@@ -231,15 +245,25 @@ def archive_file(ctx: Ctx, row: dict, f: dict) -> None:
         with ctx.lock:
             ctx.n["done"] += 1
             ctx.n["bytes"] += size if uploaded else 0
+            ctx.n["done_bytes"] += size
             ctx.changed.add(row["meeting_uuid"])
     except Stopped:  # aborted in flight: back to pending, not a failure
         ctx.db.set_status(fid, "pending")
     except Exception as e:  # noqa: BLE001 - one bad file must not stop the run
+        if gone_from_zoom(e):  # never retried again, and not counted as a failure
+            ctx.db.set_status(fid, "skipped", error="Zoom no longer has this file (404)")
+            with ctx.lock:
+                ctx.n["gone"] += 1
+            log.warning("file %s: Zoom no longer has it (404), marked not copied", fid)
+            return
         msg = redact(e if isinstance(e, (SizeMismatch, ZoomError)) else f"{type(e).__name__}: {e}")
         ctx.db.set_status(fid, "failed", error=msg)
         with ctx.lock:
             ctx.n["failed"] += 1
         log.error("file %s failed: %s", fid, msg)
+    finally:
+        with ctx.lock:
+            ctx.live.pop(fid, None)
 
 
 # --- run control -------------------------------------------------------------------------------
@@ -316,6 +340,8 @@ def list_all(ctx: Ctx, frm: date, to: date, users, meeting_id, limit) -> tuple[l
 def download(ctx: Ctx, tasks: list, workers: int) -> None:
     """Newest meeting first. On stop or Ctrl-C queued files are cancelled and in-flight ones aborted (pending)."""
     tasks = sorted(tasks, key=lambda t: t[0], reverse=True)  # stable: files of one meeting stay together
+    ctx.n["queued"], ctx.n["queued_bytes"] = len(tasks), sum(int(r["zoom_size"] or 0) for _, r, _ in tasks)
+    ctx.phase, ctx.copy_started = "copying", time.time()
     with ThreadPoolExecutor(workers) as pool:
         pending = {pool.submit(archive_file, ctx, row, f) for _, row, f in tasks}
         try:
@@ -326,6 +352,7 @@ def download(ctx: Ctx, tasks: list, workers: int) -> None:
         if ctx.stop.is_set():
             log.warning("Stopping: queued files are cancelled, in-flight downloads aborted (left pending)")
             pool.shutdown(wait=True, cancel_futures=True)
+    ctx.phase = "finishing"
 
 
 def run_archive(ctx: Ctx, frm: date, to: date, user=None, meeting_id=None, limit=None, workers=3) -> int:

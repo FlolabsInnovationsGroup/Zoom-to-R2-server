@@ -27,7 +27,7 @@ KEYS = {"manifest": "_system/manifest.sqlite", "search": "_system/search.sqlite"
 LOG_PREFIX = "_system/access-log/"
 LOCK_KEY = "_system/sync-lock.json"
 CHECK_EVERY = 30      # seconds between "did it change in R2?" checks per file
-LOCK_STALE = 20 * 60  # a sync lock older than this is from a run that died (functions stop after at most 800 s)
+LOCK_STALE = 120  # seconds without a renewal = the run died (a live run renews it every few seconds)
 
 _state: dict[str, dict] = {}  # name -> {"etag": str | None, "checked": float}
 _lock = threading.Lock()
@@ -153,20 +153,23 @@ def take_lock(r2, who: str) -> str | None:
         return None
     token = uuid.uuid4().hex
     try:
-        r2.write_if(LOCK_KEY, json.dumps({"running": True, "since": time.time(), "by": who, "token": token}).encode(), etag)
+        r2.write_if(LOCK_KEY, json.dumps({"running": True, "since": time.time(), "started": time.time(), "by": who,
+                                          "token": token, "progress": {"phase": "listing"}}).encode(), etag)
     except Conflict:
         return None
     return token
 
 
-def renew_lock(r2, token: str) -> bool:
-    """Called every minute by a running sync, so a long run's lock never looks abandoned. False = not ours any more."""
+def renew_lock(r2, token: str, progress: dict | None = None) -> bool:
+    """Called every few seconds by a running sync: keeps its lock fresh and publishes live progress for the admin
+    page. False = the lock is not ours any more."""
     try:
         r = r2.s3.get_object(Bucket=r2.bucket, Key=LOCK_KEY)
         cur = json.loads(r["Body"].read() or b"{}")
         if cur.get("token") != token:
             return False
-        r2.write_if(LOCK_KEY, json.dumps({**cur, "since": time.time()}).encode(), r["ETag"])
+        new = {**cur, "since": time.time(), **({"progress": progress} if progress is not None else {})}
+        r2.write_if(LOCK_KEY, json.dumps(new).encode(), r["ETag"])
         return True
     except Exception:  # noqa: BLE001 - try again next minute
         return True
@@ -183,7 +186,11 @@ def release_lock(r2, token: str, summary: dict) -> None:
 
 
 def lock_state(r2) -> dict:
+    """The lock object; a run that stopped renewing it (died) shows as {"running": False, "died": True, ...}."""
     try:
-        return json.loads(r2.read(LOCK_KEY) or b"{}")
+        st = json.loads(r2.read(LOCK_KEY) or b"{}")
     except Exception:  # noqa: BLE001
         return {}
+    if st.get("running") and time.time() - float(st.get("since", 0)) > LOCK_STALE:
+        st = {**st, "running": False, "died": True}
+    return st
