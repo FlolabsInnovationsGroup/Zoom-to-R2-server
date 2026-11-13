@@ -6,6 +6,7 @@ deadline stay pending for the next run, so a big day never overruns the function
 """
 import logging
 import os
+import threading
 import time
 from datetime import date, datetime, timedelta, timezone
 
@@ -18,6 +19,7 @@ from .zoom import Zoom, redact
 
 log = logging.getLogger("zoom_archive")
 LOOKBACK_DAYS = 7
+SAVE_EVERY = 60  # seconds: progress saved to R2 and the lock renewed while a run is copying
 
 
 def deadline_seconds() -> int:
@@ -49,10 +51,29 @@ def run_sync(who: str) -> dict:
         ctx = archive.Ctx(cfg, Zoom(cfg), r2, db, load_teams(cfg.teams_yaml),
                           load_accounts(CONTRACTS / "access_groups.json"), "sync")
         ctx.deadline = time.time() + deadline_seconds()
-        code = archive.run_archive(ctx, frm, to, workers=max(1, min(cfg.concurrency, 8)))
+        done = threading.Event()
+
+        def keep_saving():
+            """Copied files show up in R2's progress file within a minute, and a cut-off run loses at most that."""
+            while not done.wait(SAVE_EVERY):
+                if not r2db.renew_lock(r2, token):
+                    log.warning("sync lock taken over by another run")
+                try:
+                    r2.write(r2db.KEYS["manifest"], db.serialize())
+                except Exception as e:  # noqa: BLE001 - try again next minute
+                    log.warning("progress save failed: %s", redact(e))
+
+        saver = threading.Thread(target=keep_saving, daemon=True)
+        saver.start()
+        try:
+            code = archive.run_archive(ctx, frm, to, workers=max(1, min(cfg.concurrency, 8)))
+        finally:
+            done.set()
+            saver.join(30)
+            r2.write(r2db.KEYS["manifest"], db.serialize())  # the final state, after any periodic save
         left = db.q("SELECT COUNT(*) AS n FROM files WHERE status = 'pending'")[0]["n"]
         db.c.close()
-        r2db.forget("manifest")  # run_archive already saved it to R2 (finalize); re-read it next time
+        r2db.forget("manifest")  # re-read it from R2 next time
         if ctx.changed and os.path.isfile(cfg.search_db_path):
             r2db.push(r2, "search")
         summary.update(ok=code in (0, 1), files=ctx.n["done"], failed=ctx.n["failed"], skipped=ctx.n["skipped"],

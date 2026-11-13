@@ -159,6 +159,19 @@ def take_lock(r2, who: str) -> str | None:
     return token
 
 
+def renew_lock(r2, token: str) -> bool:
+    """Called every minute by a running sync, so a long run's lock never looks abandoned. False = not ours any more."""
+    try:
+        r = r2.s3.get_object(Bucket=r2.bucket, Key=LOCK_KEY)
+        cur = json.loads(r["Body"].read() or b"{}")
+        if cur.get("token") != token:
+            return False
+        r2.write_if(LOCK_KEY, json.dumps({**cur, "since": time.time()}).encode(), r["ETag"])
+        return True
+    except Exception:  # noqa: BLE001 - try again next minute
+        return True
+
+
 def release_lock(r2, token: str, summary: dict) -> None:
     try:
         r = r2.s3.get_object(Bucket=r2.bucket, Key=LOCK_KEY)

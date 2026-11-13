@@ -274,7 +274,7 @@ class FakeZoom:
         return out
 
     def _user_recordings(self, h, user_ref: str, query: dict) -> None:
-        user = next((u for u in self.users if user_ref in (u["id"], u["email"])), None)
+        user = next((u for u in self.users if user_ref == u["id"] or user_ref.lower() == u["email"].lower()), None)  # Zoom ignores email case
         if user is None:
             return self._json(h, 404, {"code": 1001, "message": "User does not exist."})
         mine = [m for m in self.meetings.values() if m["host_id"] == user["id"]]

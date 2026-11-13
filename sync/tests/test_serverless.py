@@ -168,3 +168,39 @@ def test_a_wrong_teams_yaml_path_falls_back_to_the_bundled_rules(env, monkeypatc
     monkeypatch.setenv("TEAMS_YAML", "/opt/zoom-archive/app/sync/teams.yaml")  # a server path copied into Vercel
     cfg = load_config()
     assert cfg.teams_yaml.endswith("teams.yaml") and not cfg.teams_yaml.startswith("/opt")
+
+
+def test_sync_finds_the_zoom_users_without_zoom_user_emails(cloud_env, fake_zoom, monkeypatch):
+    three_users(fake_zoom)
+    fake_zoom.users_scope_error = True  # the real app cannot list users (4711)
+    monkeypatch.delenv("ZOOM_USER_EMAILS", raising=False)  # and the setting is missing, as on Vercel
+    got = cloud.run_sync("cron")
+    assert got["ok"] and got["files"] > 0 and not got.get("error"), got
+
+
+def test_progress_is_saved_to_r2_while_a_run_is_copying(cloud_env, fake_zoom, monkeypatch, tmp_path):
+    three_users(fake_zoom)
+    monkeypatch.setattr(cloud, "SAVE_EVERY", 0.05)
+    saves = []
+    real_write = R2.write
+
+    def counting_write(self, key, data):
+        if key == r2db.KEYS["manifest"]:
+            saves.append(len(data))
+        return real_write(self, key, data)
+
+    monkeypatch.setattr(R2, "write", counting_write)
+    got = cloud.run_sync("cron")
+    assert got["ok"] and got["files"] > 0
+    assert len(saves) >= 2  # during the run, and the final state at the end
+
+
+def test_a_running_sync_keeps_its_lock_fresh(cloud_env):
+    r2 = R2(load_config())
+    token = r2db.take_lock(r2, "cron")
+    old = json.loads(admin_s3().get_object(Bucket=cloud_env["bucket"], Key=r2db.LOCK_KEY)["Body"].read())
+    admin_s3().put_object(Bucket=cloud_env["bucket"], Key=r2db.LOCK_KEY,
+                          Body=json.dumps({**old, "since": old["since"] - 3600}).encode())  # looks an hour old
+    assert r2db.renew_lock(r2, token)
+    assert r2db.take_lock(r2, "admin") is None  # renewed, so a second run still waits
+    assert not r2db.renew_lock(r2, "someone-else")

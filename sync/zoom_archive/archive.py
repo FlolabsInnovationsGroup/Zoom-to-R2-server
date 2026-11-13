@@ -51,7 +51,8 @@ def get_users(ctx: Ctx, only: str | None = None) -> list[tuple[str, str]]:
     except HTTPError as e:
         if e.code != 4711:
             raise
-        users = [(m, m) for m in ctx.cfg.zoom_user_emails]
+        # ZOOM_USER_EMAILS, else the three accounts in contracts/access_groups.json
+        users = [(m, m) for m in (ctx.cfg.zoom_user_emails or list((ctx.accounts or {}).keys()))]
         ctx.fallback = True
         print("NOTE: GET /users failed (missing scope user:read:list_users:admin, code 4711); "
               f"using ZOOM_USER_EMAILS instead ({len(users)} users).")
