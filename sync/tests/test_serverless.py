@@ -244,3 +244,13 @@ def test_a_dead_runs_lock_frees_itself_after_two_minutes(cloud_env):
                           Body=json.dumps({**old, "since": old["since"] - 3 * 60}).encode())  # silent for 3 minutes
     assert r2db.lock_state(r2).get("died") is True
     assert r2db.take_lock(r2, "admin")  # the next check can start
+
+
+def test_health_says_which_commit_is_deployed(cclient, monkeypatch):
+    assert cclient.get("/api/health").json() == {"ok": True, "commit": "local"}
+
+
+def test_a_sync_that_cannot_start_reports_why(cloud_env, monkeypatch):
+    monkeypatch.delenv("ZOOM_CLIENT_SECRET")
+    got = cloud.run_sync("admin")
+    assert got["ok"] is False and "ZOOM_CLIENT_SECRET" in got["error"]

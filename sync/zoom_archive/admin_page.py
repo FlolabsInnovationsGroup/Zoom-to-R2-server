@@ -223,7 +223,10 @@ const done=()=>{b.textContent="Copied";setTimeout(()=>{b.textContent=l},2000)};
 (navigator.clipboard?navigator.clipboard.writeText(n.textContent):Promise.reject()).then(done,()=>{const r=document.createRange();r.selectNodeContents(n);const s=getSelection();s.removeAllRanges();s.addRange(r);b.textContent="Press Ctrl+C"})});
 document.addEventListener("submit",e=>{const f=e.target,m=f.dataset.confirm;if(m&&!confirm(m)){e.preventDefault();return}
 if(f.hasAttribute("data-busy")){e.preventDefault();const b=f.querySelector("button");b.disabled=true;b.textContent="Checking...";
-fetch(f.action,{method:"POST",body:new URLSearchParams(new FormData(f)),credentials:"same-origin"}).then(()=>refresh()).catch(()=>{});
+const say=m=>{const h=document.createElement("p");h.className="hint bad";h.setAttribute("role","alert");h.textContent=m;f.after(h);b.disabled=false;b.textContent="Check Zoom now"};
+fetch(f.getAttribute("action")||location.pathname,{method:"POST",body:new URLSearchParams(new FormData(f)),credentials:"same-origin"})
+.then(r=>{if(r.status===409)say("A check is already running.");else if(!r.ok)say("Could not start the check (error "+r.status+"). Reload the page and try again.");refresh()})
+.catch(()=>say("Could not reach the server. Check your connection and try again."));
 live=true;setTimeout(refresh,2500);return}
 if(f.hasAttribute("data-needs-group")){const bs=f.querySelectorAll("input[name=groups]");const ok=[...bs].some(b=>b.checked);
 if(bs.length)bs[0].setCustomValidity(ok?"":"Choose at least one access group.");if(!ok){bs[0].reportValidity();e.preventDefault()}}

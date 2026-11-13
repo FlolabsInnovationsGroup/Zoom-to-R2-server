@@ -48,9 +48,14 @@ def deadline_seconds() -> int:
 
 def run_sync(who: str) -> dict:
     """One sync run. Returns a short summary dict (also kept in the sync lock object for the admin page)."""
-    cfg = load_config()
-    r2 = R2(cfg)
-    token = r2db.take_lock(r2, who)
+    try:
+        cfg = load_config()
+        r2 = R2(cfg)
+        token = r2db.take_lock(r2, who)
+    except Exception as e:  # noqa: BLE001 - settings or R2 unreachable: say so instead of a bare 500
+        msg = redact(f"{type(e).__name__}: {e}")
+        log.error("sync could not start: %s", msg)
+        return {"ok": False, "error": msg}
     if not token:
         return {"ok": False, "busy": True, "message": "Another sync is already running."}
     summary = {"by": who, "started": now()}

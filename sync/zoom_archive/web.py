@@ -297,6 +297,11 @@ def create_app(cfg: dict | None = None) -> Starlette:
                             secure=request.url.hostname not in LOCAL_HOSTS, path="/admin")
         return resp
 
+    async def health(request: Request):
+        """Public: is the app up, and which commit is deployed (Vercel sets VERCEL_GIT_COMMIT_SHA)."""
+        import os
+        return JSONResponse({"ok": True, "commit": (os.environ.get("VERCEL_GIT_COMMIT_SHA") or "local")[:7]})
+
     async def cron_sync(request: Request):
         """Vercel cron (daily): Authorization: Bearer <CRON_SECRET>."""
         secret = cfg.get("cron_secret") or ""
@@ -364,6 +369,7 @@ def create_app(cfg: dict | None = None) -> Starlette:
         Route("/mcp", mcp_app),
         Route("/mcp/{key}", mcp_app),
         Route("/api/cron/sync", cron_sync),
+        Route("/api/health", health),
     ], middleware=[Middleware(Refresh)] if serverless else [])
     app.state.archive = archive
     return app
