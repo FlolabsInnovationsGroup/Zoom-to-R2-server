@@ -162,3 +162,9 @@ def test_deadline_leaves_files_for_the_next_run(cloud_env, fake_zoom, monkeypatc
     monkeypatch.setattr(cloud, "deadline_seconds", lambda: -1)  # already past: start nothing
     got = cloud.run_sync("cron")
     assert got["ok"] and got["files"] == 0 and got["left"] > 0, got
+
+
+def test_a_wrong_teams_yaml_path_falls_back_to_the_bundled_rules(env, monkeypatch):
+    monkeypatch.setenv("TEAMS_YAML", "/opt/zoom-archive/app/sync/teams.yaml")  # a server path copied into Vercel
+    cfg = load_config()
+    assert cfg.teams_yaml.endswith("teams.yaml") and not cfg.teams_yaml.startswith("/opt")

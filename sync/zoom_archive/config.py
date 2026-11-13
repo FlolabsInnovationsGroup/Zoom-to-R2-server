@@ -1,5 +1,6 @@
 """Config from the env names in .env.example. Test-only overrides: ZOOM_API_BASE, ZOOM_OAUTH_URL,
 R2_ENDPOINT_URL. The repo-root .env is loaded unless ZOOM_ARCHIVE_NO_DOTENV=1."""
+import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -51,6 +52,9 @@ def load_config() -> Config:
     cfg.search_db_path = g("SEARCH_DB_PATH") or search.default_path(cfg.manifest_path)
     if r2db.enabled():  # serverless: local copies of the files kept in R2
         cfg.manifest_path, cfg.search_db_path = r2db.path("manifest"), r2db.path("search")
+    if not Path(cfg.teams_yaml).is_file():  # e.g. a server path copied into Vercel: use the rules shipped with the code
+        logging.getLogger("zoom_archive").warning("TEAMS_YAML %s not found, using the bundled teams.yaml", cfg.teams_yaml)
+        cfg.teams_yaml = str(SYNC_DIR / "teams.yaml")
     missing = [n for n, v in (("ZOOM_ACCOUNT_ID", cfg.zoom_account_id), ("ZOOM_CLIENT_ID", cfg.zoom_client_id),
                               ("ZOOM_CLIENT_SECRET", cfg.zoom_client_secret),
                               ("R2_ACCESS_KEY_ID", cfg.r2_access_key_id),
