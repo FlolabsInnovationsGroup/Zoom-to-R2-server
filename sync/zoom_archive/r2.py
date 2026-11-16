@@ -1,5 +1,5 @@
 """Cloudflare R2 (S3 API). Only head, get, list, put (plain and conditional) and multipart calls exist here.
-There is no delete call."""
+There is no delete call, and the client refuses delete calls anyway (see guard)."""
 import hashlib
 
 import boto3
@@ -24,14 +24,36 @@ class Conflict(RuntimeError):
     """A conditional write lost: the object changed since it was read."""
 
 
+class AlreadyThere(RuntimeError):
+    """A recording file already exists in R2 under this name: it is never overwritten."""
+
+
+# This app never deletes anything in R2 and never changes the bucket's settings. Every R2 client it creates refuses
+# these calls before they leave the process, whatever the R2 key would allow. (AbortMultipartUpload stays allowed:
+# it only discards the parts of an upload that never finished; it cannot touch a stored file.)
+FORBIDDEN_CALLS = ("DeleteObject", "DeleteObjects", "DeleteBucket", "PutBucketLifecycleConfiguration",
+                   "DeleteBucketLifecycle", "PutBucketPolicy", "DeleteBucketPolicy", "PutBucketVersioning",
+                   "PutObjectRetention", "PutObjectLockConfiguration")
+
+
+def _refuse(event_name: str, **_):
+    raise PermissionError(f"Refused: this app never deletes or reconfigures anything in R2 ({event_name.split('.')[-1]})")
+
+
+def guard(client):
+    for op in FORBIDDEN_CALLS:
+        client.meta.events.register(f"before-call.s3.{op}", _refuse)
+    return client
+
+
 class R2:
     def __init__(self, cfg):
         self.bucket = cfg.r2_bucket
-        self.s3 = boto3.client(
+        self.s3 = guard(boto3.client(
             "s3", endpoint_url=cfg.r2_endpoint, region_name="auto", aws_access_key_id=cfg.r2_access_key_id,
             aws_secret_access_key=cfg.r2_secret_access_key,
             config=BotoConfig(signature_version="s3v4", s3={"addressing_style": "path"},
-                              retries={"max_attempts": 4, "mode": "standard"}, read_timeout=120))
+                              retries={"max_attempts": 4, "mode": "standard"}, read_timeout=120)))
 
     def head(self, key: str) -> int | None:
         try:
@@ -117,8 +139,14 @@ class R2:
                     del buf[:PART_SIZE]
             if exact and n != expected:
                 raise SizeMismatch(f"size mismatch: zoom {expected}, received {n}")
-            if not multipart:
-                self.write(key, bytes(buf))
+            if not multipart:  # create only: a file already in R2 is never replaced
+                try:
+                    self.s3.put_object(Bucket=self.bucket, Key=key, Body=bytes(buf), ContentType=content_type(key),
+                                       IfNoneMatch="*")
+                except ClientError as e:
+                    if e.response.get("ResponseMetadata", {}).get("HTTPStatusCode") in (409, 412):
+                        raise AlreadyThere(f"R2 already has {key}; it is never overwritten") from None
+                    raise
             else:
                 if buf:
                     self._part(key, upload_id, parts, bytes(buf))

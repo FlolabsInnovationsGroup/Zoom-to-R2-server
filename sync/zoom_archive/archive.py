@@ -17,7 +17,7 @@ from . import zoom as zmod
 from .manifest import now
 from .naming import account_slug, assign_file_names, format_utc, match_team, meeting_path
 from .outputs import group, is_complete, meeting_object
-from .r2 import SizeMismatch
+from .r2 import Conflict, SizeMismatch
 from .vtt import parse_vtt
 from .zoom import HTTPError, Transient, ZoomError, redact
 
@@ -236,7 +236,11 @@ def archive_file(ctx: Ctx, row: dict, f: dict) -> None:
         ctx.live[fid] = {"topic": row.get("topic") or "", "type": row.get("file_type") or "", "done": 0, "size": size}
     try:
         exact = row["file_type"] not in SIZE_UNRELIABLE
-        uploaded = not exact or ctx.r2.head(key) != size
+        there = ctx.r2.head(key)
+        if there is not None and exact and there != size:  # never replaced: someone must look at it
+            raise SizeMismatch(f"R2 already has a different file under this name ({there} bytes, Zoom says {size}); "
+                               "it is never overwritten")
+        uploaded = there is None
         sha = transfer(ctx, row, f) if uploaded else ctx.r2.sha256(key)
         got = ctx.r2.head(key)
         if (got != size) if exact else not got:
@@ -424,8 +428,11 @@ def finalize(ctx: Ctx, run_id: str) -> None:
         for u in ctx.touched & complete.keys():
             m = meetings[u]
             key = m["folder"] + "meeting.json"
-            if u in ctx.changed or ctx.r2.head(key) is None:
-                ctx.r2.write(key, (json.dumps(m, ensure_ascii=False, indent=2) + "\n").encode())
+            if ctx.r2.head(key) is None:  # written once when the meeting is complete; never replaced
+                try:
+                    ctx.r2.write_if(key, (json.dumps(m, ensure_ascii=False, indent=2) + "\n").encode(), None)
+                except Conflict:
+                    pass  # written meanwhile by another run
         for u in ctx.changed & complete.keys():
             index_meeting(ctx, meetings[u])
     for t in ctx.db.q("SELECT meeting_uuid FROM trash_items WHERE archived = 0"):
