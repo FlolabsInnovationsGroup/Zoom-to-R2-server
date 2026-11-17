@@ -10,6 +10,6 @@
     { "source": "/(.*)", "destination": "/api/index" }
   ],
   "crons": [
-    { "path": "/api/cron/sync", "schedule": "*/30 * * * *" }
+    { "path": "/api/cron/sync", "schedule": "0 */2 * * *" }
   ]
 }

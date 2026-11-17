@@ -303,7 +303,7 @@ def create_app(cfg: dict | None = None) -> Starlette:
         return JSONResponse({"ok": True, "commit": (os.environ.get("VERCEL_GIT_COMMIT_SHA") or "local")[:7]})
 
     async def cron_sync(request: Request):
-        """Vercel cron (every 30 minutes): Authorization: Bearer <CRON_SECRET>."""
+        """Vercel cron (every 2 hours): Authorization: Bearer <CRON_SECRET>."""
         secret = cfg.get("cron_secret") or ""
         given = request.headers.get("authorization", "")
         if not serverless or not secret or not hmac.compare_digest(given.encode(), f"Bearer {secret}".encode()):

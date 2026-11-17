@@ -1,6 +1,6 @@
 # Deploying on Vercel (serverless)
 
-The admin page, the MCP server and the Zoom to R2 sync (every 30 minutes) run as one Vercel function (`api/index.py`).
+The admin page, the MCP server and the Zoom to R2 sync (every 2 hours) run as one Vercel function (`api/index.py`).
 No server and no disk: the three small SQLite databases (copy progress, API keys, search index) live in the
 R2 bucket under `_system/`, next to the recordings.
 
@@ -8,7 +8,7 @@ R2 bucket under `_system/`, next to the recordings.
 | --- | --- |
 | Admin page | `https://<your-domain>/admin` |
 | MCP for Claude / ChatGPT | `https://<your-domain>/mcp/<api-key>` |
-| Automatic sync | Vercel cron every 30 minutes, calls `/api/cron/sync` |
+| Automatic sync | Vercel cron every 2 hours, calls `/api/cron/sync` |
 | Sync now | "Check Zoom now" button on the admin page |
 
 Needs **Vercel Pro**: company use is not allowed on Hobby, and the sync needs Pro's longer function time

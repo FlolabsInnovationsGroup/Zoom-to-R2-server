@@ -389,7 +389,7 @@ def _run_card(run, run_log: list, totals: dict | None = None) -> str:
 
 
 def _cloud_card(lock: dict, totals: dict | None = None) -> str:
-    """Serverless (Vercel): no long-running copy. Zoom is checked every 30 minutes by a cron, or now with the button.
+    """Serverless (Vercel): no long-running copy. Zoom is checked every 2 hours by a cron, or now with the button.
     lock: the sync lock object ({"running", "since"} or {"running": False, "last": summary})."""
     t = totals or {}
     left_b = max((t.get("bytes_total") or 0) - (t.get("bytes_verified") or 0), 0)
@@ -437,7 +437,7 @@ def _cloud_card(lock: dict, totals: dict | None = None) -> str:
     btn = (f'<form method="post" action="/admin" data-busy>'
            f'<input type="hidden" name="action" value="sync_now"><button class="primary"{off}>'
            f'{"Checking..." if off else "Check Zoom now"}</button></form>')
-    hint = ("Zoom is checked automatically every 30 minutes. New recordings are copied to R2, newest first; "
+    hint = ("Zoom is checked automatically every 2 hours. New recordings are copied to R2, newest first; "
             "anything not finished in one check is picked up by the next.")
     return (f'<section class="card" aria-labelledby="rc"><div class="run"><div><h3 id="rc">Zoom to R2</h3>'
             f'<div class="state" role="status" aria-live="polite">{state}</div><div class="hint">{hint}</div></div>'
