@@ -1,4 +1,4 @@
-"""Serverless sync (Vercel): one time-limited sync run inside a function, from the daily cron or the admin button.
+"""Serverless sync (Vercel): one time-limited sync run inside a function, from the cron (every 30 minutes) or the admin button.
 
 Same work as `--mode sync` on a server: list the last LOOKBACK_DAYS of Zoom recordings (plus any meeting with
 unfinished files), copy what is new to R2, update meeting.json and the search index. Files not started before the

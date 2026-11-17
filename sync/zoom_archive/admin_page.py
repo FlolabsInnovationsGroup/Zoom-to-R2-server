@@ -389,7 +389,7 @@ def _run_card(run, run_log: list, totals: dict | None = None) -> str:
 
 
 def _cloud_card(lock: dict, totals: dict | None = None) -> str:
-    """Serverless (Vercel): no long-running copy. Zoom is checked once a day by a cron, or now with the button.
+    """Serverless (Vercel): no long-running copy. Zoom is checked every 30 minutes by a cron, or now with the button.
     lock: the sync lock object ({"running", "since"} or {"running": False, "last": summary})."""
     t = totals or {}
     left_b = max((t.get("bytes_total") or 0) - (t.get("bytes_verified") or 0), 0)
@@ -431,13 +431,13 @@ def _cloud_card(lock: dict, totals: dict | None = None) -> str:
                 f'copied {num(last.get("files", 0))} files ({gb(last.get("bytes", 0))})'
                 + (f', {num(last["failed"])} failed' if last.get("failed") else "")
                 + (f', {num(last["left"])} left for next time' if last.get("left") else ""))
-        by = "the daily check" if last.get("by") == "cron" else "Check Zoom now"
+        by = "the automatic check" if last.get("by") == "cron" else "Check Zoom now"
         state += f'<div class="hint">Last check {esc(when(last["finished"]))} by {by}: {what}.</div>'
     off = " disabled" if lock.get("running") else ""
     btn = (f'<form method="post" action="/admin" data-busy>'
            f'<input type="hidden" name="action" value="sync_now"><button class="primary"{off}>'
            f'{"Checking..." if off else "Check Zoom now"}</button></form>')
-    hint = ("Zoom is checked automatically once a day. New recordings are copied to R2, newest first; "
+    hint = ("Zoom is checked automatically every 30 minutes. New recordings are copied to R2, newest first; "
             "anything not finished in one check is picked up by the next.")
     return (f'<section class="card" aria-labelledby="rc"><div class="run"><div><h3 id="rc">Zoom to R2</h3>'
             f'<div class="state" role="status" aria-live="polite">{state}</div><div class="hint">{hint}</div></div>'
